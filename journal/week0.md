@@ -2,7 +2,7 @@
 
 ## Getting the AWS CLI working
 
- Installed the AWS CLI using gitpod environment and saved the configuration file in the gitpod.yaml file.
+ I installed the AWS CLI using gitpod environment and saved the configuration file in the gitpod.yaml file.
 Created a new user and generated AWS credentials for the user by:
 
 - Navigating to the IAM USERS Console and enabling access for the user.
@@ -13,17 +13,27 @@ Created a new user and generated AWS credentials for the user by:
 - Downloaded the CSV with the credentials.
 Created both a Billing Alert and AWS Budget.
 
-Then using Lucid charts created Cruddur Conceptual Diagram and Cruddur Logical Diagram as shown below:
+Then using Lucid charts recreated Cruddur Conceptual Diagram and Cruddur Logical Diagram as shown below:
 
-![image](./assets/Crudder-Conceptual-Diagram.png)
-<!-- ![lucid chart image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/blob/main/journal/assets/Crudder%20Conceptual%20Diagram.png) -->
+## Recreated Cruddur Conceptual Diagram
 
-![image](./assets/Crudder-Logical-Diagram.png)
-<!-- ![lucid chart image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/blob/main/journal/assets/Crudder%20Logical%20Diagram.png) -->
+![recreated_cruddur_conceptual_design](./assets/Crudder-Conceptual-Diagram.png)
 
-Though i could not create the SeverlesCaching due to the fact that it required upgrading my free account in order to enable it allow a premium feature as shown below:
-
-![image](./assets/Crudder-SVG.png)
-<!-- ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/blob/main/journal/assets/Crudder%20SVG%20.png) -->
+[Lucid Chart Share Link](https://lucid.app/lucidchart/32e9d2d4-e003-439a-9446-27ac60020ef5/edit?viewport_loc=-82%2C-10%2C1969%2C931%2C0_0&invitationId=inv_e718efa7-8c15-447c-bb3c-eafeb1a780f3)
 
 
+## Recreated Cruddur Architectural Logical Diagram
+![recreated_cruddur_logical_design](./assets/Crudder-Logical-Diagram.png)
+
+[Lucid Chart Share Link](https://lucid.app/lucidchart/dd559879-66f9-432e-93ae-a83424653807/edit?viewport_loc=-786%2C-388%2C2622%2C1240%2C0_0&invitationId=inv_455c05bb-548e-4bfb-a985-05a677063bf8)
+
+
+Though i could not create the Severless Caching due to the fact that it required upgrading my free account in order to enable it allow a premium feature as shown below:
+
+![Cruddur_SVG_Proof](./assets/Crudder-SVG.png)
+
+
+## Aws Budget
+I created a Zero-spend-budget which notifies me whenever i excced my free tier limit.
+
+![aws_budget](./assets/Aws-budget.png)
