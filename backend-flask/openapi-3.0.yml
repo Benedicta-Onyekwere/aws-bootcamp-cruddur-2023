@@ -153,7 +153,6 @@ paths:
       description: 'Return activity for all of those thst i follow'
       tags:
         - activities
-      parameters: []
       responses:
         '200':
           description: 'Returns an array of activities'
