@@ -27,4 +27,9 @@ EXPOSE ${PORT}
 
 # CMD(Command to run flask)
 # python3 -m flask run --host=0.0.0 --port=4567
-CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0", "--port=4567"]
+#CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0", "--port=4567"]
+
+# Make it executable
+RUN chmod +x /backend-flask/run_flask.sh
+
+ENTRYPOINT [ "/backend-flask/run_flask.sh" ]
