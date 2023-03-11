@@ -142,7 +142,7 @@ networks:
 
 ## Creating a Backend Notification feature (Backend and Frontend)
 ### Adding an endpoint to the notifications tab Backend:
-- In the backend added a new path that is notifications in the openapi i.e **/api/activities/notififcations**.
+- In the backend-flask added a new path that is notifications in the openapi i.e **/api/activities/notififcations**.
 - Added a get request.
 - Defined a new end endpoint in app.py file.
 - Created a **notifications_acitivities.py** file just as the other rail services so they are all microservices.
@@ -157,7 +157,7 @@ networks:
 
 
 ### Implement Frontend Notifications Page
-- In the Frontend, went to the entrypoint which is the **app.js** file.
+- In the Frontend-react.js file, went to the entrypoint which is the **app.js** file.
 - Created a new page **NotificationsFeedPage** to the other existing pages.
 - Added its path to the Browser Router.
 - Created a file named **NotificationsFeedPage.js**
@@ -172,4 +172,55 @@ networks:
 -  
 
 
+## Adding DynamoDB Local and Postgres
+Since we are going to use Postgres and DynamoDB local in future labs, they can be brought back in as containers and reference them externally
 
+Integrating the following into my existing docker compose file:
+
+## Postgres
+```
+services:
+  db:
+    image: postgres:13-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - '5432:5432'
+    volumes: 
+      - db:/var/lib/postgresql/data
+volumes:
+  db:
+    driver: local
+```
+
+To work with Postgres need to have the drivers installed. To install Postgres client into Gitpod, the following code is used:
+```
+  - name: postgres
+    init: |
+      curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc|sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+      echo "deb http://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" |sudo tee  /etc/apt/sources.list.d/pgdg.list
+      sudo apt update
+      sudo apt install -y postgresql-client-13 libpq-dev
+       
+   ```
+ 
+  ## DynamoDB Local  
+  ```
+  services:
+  dynamodb-local:
+    # https://stackoverflow.com/questions/67533058/persist-local-dynamodb-data-in-volumes-lack-permission-unable-to-open-databa
+    # We needed to add user:root to get this working.
+    user: root
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    image: "amazon/dynamodb-local:latest"
+    container_name: dynamodb-local
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./docker/dynamodb:/home/dynamodblocal/data"
+    working_dir: /home/dynamodblocal
+    
+  
+      
