@@ -221,6 +221,39 @@ To work with Postgres need to have the drivers installed. To install Postgres cl
     volumes:
       - "./docker/dynamodb:/home/dynamodblocal/data"
     working_dir: /home/dynamodblocal
-    
+   ```
+  ## Homework Challenges
+  ### Run the dockerfile CMD as an external script.
   
+To do this i created a bashscript file in the backend-flask named run_flask.sh and added the following script:
+```
+#!/bin/sh
+
+python3 -m flask run --host=0.0.0.0 --port=4567
+```
+Then added an Entrypoint instead of CMD and then included the path to the scrpit but I first made the script executable using the following command:
+
+`RUN chmod +x /backend-flask/run_flask.sh`
+
+`ENTRYPOINT [ "/backend-flask/run_flask.sh" ]`
+
+### Research best practices of Dockerfiles and attempt to implement it in your Dockerfile
+I implemented some of the best Dockerfile practices i researched in my dockerfile such as:
+- Setting a non-root user because running processes as root can lead to vulnerabilities. I used the User command to set this as follows:
+
+`RUN useradd -ms /bin/bash myuser
+USER myuser`
+
+- I cleaned up after the installation instructions because cleaning up after each instruction is a best practice to minimize the size of a Docker image.I implemented this by using the following command in order to remove unnecessary files and packages after installing them, and delete temporary files and directories.
+
+`RUN apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*`
+
+- I signed up with Synk OpenSource Security and imported my repository so it can check for vulnerabilities and help fix them.
+
+![synk](./assets/synk-opensource-security.png)
+
+- I hide sensitive data in my docker compose file like the Postgres User and Postgres password in a .env file i created and also put the .env file in a gitignore file I created as well. 
+
+
+
       
