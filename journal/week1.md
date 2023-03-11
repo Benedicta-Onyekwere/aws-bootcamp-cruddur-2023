@@ -140,6 +140,36 @@ networks:
 ![Cruddur_initial_homepage](./assets/Cruddur-initial-home-page.png)
 
 
-## Creating a Backend the Notification feature (Backend and Frontend)
+## Creating a Backend Notification feature (Backend and Frontend)
+### Adding an endpoint to the notifications tab Backend:
+- In the backend added a new path that is notifications in the openapi i.e **/api/activities/notififcations**.
+- Added a get request.
+- Defined a new end endpoint in app.py file.
+- Created a **notifications_acitivities.py** file just as the other rail services so they are all microservices.
+- Copied contents/data into the **nootifications_activities.py** file.
+- Copied the 4567 port url to a browser, got an error code, fixed and resolved it.
+- Got a 404 error code which is ok.
+- Copied and appended the **/api/ctivities/notifications** and the backend code worked.
+
+
+![api_endpoint](./assets/api-activities-notifications.png)
+
+
+
+### Implement Frontend Notifications Page
+- In the Frontend, went to the entrypoint which is the **app.js** file.
+- Created a new page **NotificationsFeedPage** to the other existing pages.
+- Added its path to the Browser Router.
+- Created a file named **NotificationsFeedPage.js**
+- Copied and paste content into the file.
+- Made sure in the DesktopNavigation.js file that the notifications link has been synced/linked.
+- The Frontend notifications worked but later adjusted it from the title being highlighted as Home to Notifications Page.
+
+![initial_homepage_title](./assets/Cruddur-home-page.png)
+
+
+![notifications_page](./assets/Cruddur-notification-page.png)
+-  
+
 
 
