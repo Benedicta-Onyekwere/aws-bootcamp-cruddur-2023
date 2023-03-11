@@ -1,5 +1,9 @@
 FROM python:3.10-slim-buster
 
+# Set a non-root user for security reasons
+RUN useradd -ms /bin/bash myuser
+USER myuser
+
 # Inside Container
 # Make a new folder inside
 WORKDIR /backend-flask
@@ -8,9 +12,12 @@ WORKDIR /backend-flask
 # This contains libraries to be installed to run the app
 COPY requirements.txt requirements.txt
 
+# Clean up unnecessary files and packages
+RUN apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 # Inside Contianer
 # Install the python libraries used for the app
-RUN pip3 install -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy from outside container -> Inside
 # . means everything in the current directory
