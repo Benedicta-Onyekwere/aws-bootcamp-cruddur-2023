@@ -115,6 +115,12 @@ services:
       - "4567:4567"
     volumes:
       - ./backend-flask:/backend-flask
+      healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:4567/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
   frontend-react-js:
     environment:
       REACT_APP_BACKEND_URL: "https://4567-${GITPOD_WORKSPACE_ID}.${GITPOD_WORKSPACE_CLUSTER_HOST}"
@@ -123,6 +129,12 @@ services:
       - "3000:3000"
     volumes:
       - ./frontend-react-js:/frontend-react-js
+      healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
 
 # the name flag is a hack to change the default prepend folder
 # name when outputting the image names
@@ -142,14 +154,14 @@ networks:
 
 ## Creating a Backend Notification feature (Backend and Frontend)
 ### Adding an endpoint to the notifications tab Backend:
-- In the backend-flask added a new path that is notifications in the openapi i.e **/api/activities/notififcations**.
+- In the backend-flask added a new path that is notifications in the openapi i.e **/api/activities/notifications**.
 - Added a get request.
 - Defined a new end endpoint in app.py file.
 - Created a **notifications_acitivities.py** file just as the other rail services so they are all microservices.
-- Copied contents/data into the **nootifications_activities.py** file.
+- Copied contents/data into the **notifications_activities.py** file.
 - Copied the 4567 port url to a browser, got an error code, fixed and resolved it.
 - Got a 404 error code which is ok.
-- Copied and appended the **/api/ctivities/notifications** and the backend code worked.
+- Copied and appended the **/api/activities/notifications** and the backend code worked.
 
 
 ![api_endpoint](./assets/api-activities-notifications.png)
@@ -252,8 +264,118 @@ USER myuser`
 
 ![synk](./assets/synk-opensource-security.png)
 
-- I hide sensitive data in my docker compose file like the Postgres User and Postgres password in a .env file i created and also put the .env file in a gitignore file I created as well. 
+- I hid sensitive data in my docker compose file like the Postgres User and Postgres password in a .env file i created and also put the .env file in a gitignore file I created as well. 
+
+### Launching an EC2 Instance and Pulling a Contaianer
+To accomplish this i did the following:
+- Launched and configured an AWS ec2 instance.
+- SSH into the instance using the key pair and the instance's public IP address.
+- Updated the system.
+- Installed Docker using a bashscript from the official website  https://get.docker.com/
+
+```
+
+#!/usr/bin/env bash
+
+# Step 1:
+# This example downloads the script from https://get.docker.com/ and runs it to install the latest stable release of Docker on Linux:
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Step 2:
+# Test the installation
+docker -v
+```
+- Then I pulled the containers nginx, my own image bennieo/django etc, using the command 
+
+`docker pull <image name>`
+
+![container_images](./assets/ec2-instance.png)
+
+### Push and tag an image to DockerHub
+I was able to implement this using the following steps:
+- Got a Python Django application I'm currently working on.
+- Dockerized my application by creating a Dockerfile and docker compose file.
+- Build my application using docker compose up and debugged where necessary.
+- Used a bashscript to upload my image to dockerhub.
+- Added my credentials when prompted and image was then uploaded.
+
+```
+# USING BASH SCRIPT TO TAG AND UPLOAD AN IMAGE TO DOCKER HUB
+
+#!/usr/bin/env bash
+
+# Assumes that an image is built via `run_docker-compose.sh`
+
+# Step 1:
+# Create dockerpath
+dockerpath=django_app
+
+# Step 2:  
+# Authenticate & tag
+echo "Docker ID and Image: $dockerpath"
+docker login -u bennieo
+
+#Step 3:
+# Tag the images with your Docker ID
+docker tag $dockerpath:latest bennieo/$dockerpath
+
+# Step 4:
+# Push image to a docker repository
+docker push bennieo/$dockerpath
+```
 
 
+![my_dockerhub_image](./assets/my-dockerhub-image.png)
+
+
+### Use multi-stage building for a Dockerfile build
+I created a Dockerfile
+
+```
+# Stage 1: Build the application using Node.js and NPM
+FROM node:12-alpine AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+RUN npm run build
+
+# Stage 2: Build the final image using Nginx
+FROM nginx:1.21.3-alpine
+
+COPY --from=build /app/build /usr/share/nginx/html
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+### Defining the stages in the Dockerfile
+- I defined 2 stages: build and nginx.
+- In the first stage (build) used `node:12-alpine` as base image
+- Created a folder /app inside the container.
+- Copied all package.json files(that is package.json and package-lock.json) files into the container /app folder.
+- Installed all the required packages using `npm install`.
+- Copied the entire application code i.e files and directories from the current directory of the host OS or machine to the /app directory of the container.
+- Then ran the command `npm run buld` to build the application.
+- Stage 2 involves using `nginx:1.21.3-alpine` as base image.
+- Copying the build output from the build stage to the /usr/share/nginx/html directory in the final image.
+- Then exposing port 80, and starting the nginx server using the CMD command.
+
+### Implement a healthcheck in the V3 Docker compose file
+- I included a healthcheck service in both the backend-flask and frontend-react.js in my docker compose file to monitor and manage the health of the containers.
+- In the backend-flask added a new path that is healthcheck in the openapi i.e **/api/activities/healthcheck**.
+- Added a get request.
+- Defined a new end endpoint in app.py file.
+- Created a **healthcheck_acitivities.py** file just as the other rail services so they are all microservices.
+- Copied contents/data into the **healthcheck_activities.py** file.
+
+### Learn how to install Docker on your localmachine and get the same containers running outside of Gitpod / Codespaces
+I learnt how to do this but could not install on my localmachine because it didnt have the storage capacity needed.
+ 
 
       
