@@ -47,6 +47,6 @@ USER root
 # Make it executable
 RUN chmod +x /backend-flask/run_flask.sh
 
-USER myuser
+#USER myuser
 
 ENTRYPOINT [ "/backend-flask/run_flask.sh" ]
