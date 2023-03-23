@@ -18,12 +18,18 @@ RUN mkdir -p /backend-flask/node_modules \
 # This contains libraries to be installed to run the app
 COPY requirements.txt requirements.txt
 
+# Change ownership of files to myuser
+RUN chown -R myuser:myuser .
+
 # Clean up unnecessary files and packages
 RUN apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Inside Contianer
 # Install the python libraries used for the app
 RUN pip3 install --no-cache-dir -r requirements.txt
+
+RUN pip install flask-cors
+
 
 # Copy from outside container -> Inside
 # . means everything in the current directory
@@ -47,6 +53,6 @@ USER root
 # Make it executable
 RUN chmod +x /backend-flask/run_flask.sh
 
-#USER myuser
+USER myuser
 
 ENTRYPOINT [ "/backend-flask/run_flask.sh" ]
