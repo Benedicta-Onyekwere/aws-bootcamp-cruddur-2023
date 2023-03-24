@@ -374,6 +374,8 @@ CMD ["nginx", "-g", "daemon off;"]
 - Created a **healthcheck_acitivities.py** file just as the other rail services so they are all microservices.
 - Copied contents/data into the **healthcheck_activities.py** file.
 
+![healthcheck_notification](./assets/healthcheck-api-activities.png)
+
 ### Learn how to install Docker on your localmachine and get the same containers running outside of Gitpod / Codespaces
 I learnt how to do this but could not install on my localmachine because it didnt have the storage capacity needed.
  
