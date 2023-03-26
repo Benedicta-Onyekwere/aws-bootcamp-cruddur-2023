@@ -56,7 +56,10 @@ app = Flask(__name__)
 FlaskInstrumentor().instrument_app(app)
 RequestsInstrumentor().instrument()
 ```
+- Ran docker compose up, but it still didnt send any data to honeycomb. So created spans by an Acquiring Tracer and Creating Spans code from Honecomb.io Documentation from their website to my home_activities.py file in services folder of the backend-flask and data was then sent to honeycomb. 
 
+![honeycomb_send_data](./assets/honeycomb-dataset.png)
 
+- Created custom spans by copying and adding codes to home_activities.py from Creating Spans.
 
-- 
+![custom_pan_app_now](./assets/app-now.png)
