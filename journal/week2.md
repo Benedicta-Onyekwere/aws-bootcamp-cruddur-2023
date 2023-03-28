@@ -106,7 +106,7 @@ aws xray create-group \
 - Created AWS Sampling:
 `aws xray create-sampling-rule --cli-input-json file://aws/json/xray.json`
 
-![create_aws_sampling_rule](./asset/aws-sampling-rule.png)
+![create_aws_sampling_rule](./assets/aws-sampling-rule.png)
 
 ### Installing X-ray Daemon
 Did this by adding the following to the docker compose file:
@@ -129,7 +129,23 @@ Did this by adding the following to the docker compose file:
         AWS_XRAY_URL: "*4567-${GITPOD_WORKSPACE_ID}.${GITPOD_WORKSPACE_CLUSTER_HOST}*"
       AWS_XRAY_DAEMON_ADDRESS: "xray-daemon:2000"
   ```
-  
+  - Ran docker compose up and AWS Xray worked because data was sent to AWS.
+
+![aws_dataset](./assets/aws-xray-output.png)
+
+### Adding custom segment/subsegment
+Added a segment/subsgment codes to `user_activities.py` file in the services folder of the backend-flask:
+```
+subsegment.put_metadata('key', dict, 'namespace')
+    # xray ---
+    dict = {
+      "now": now.isoformat(),
+      "results-size": len(model['data'])
+    }
+    subsegment.put_metadata('key', dict, 'namespace')
+    ```
+    
+
       
       
 
