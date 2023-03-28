@@ -143,8 +143,56 @@ subsegment.put_metadata('key', dict, 'namespace')
       "results-size": len(model['data'])
     }
     subsegment.put_metadata('key', dict, 'namespace')
-    ```
-    
+   ```
+   #  CloudWatch Logs
+   Added to the requirements.txt in the backend-flask:
+   ```  
+   watchtower
+   ```
+  Then installed watchtower using:
+  
+  `pip install -r requirements.txt`
+  
+  Added in `app.py`:
+  ```
+  import watchtower
+  import logging
+  from time import strftime
+  ```
+  ```
+  # Configuring Logger to Use CloudWatch
+  LOGGER = logging.getLogger(__name__)
+  LOGGER.setLevel(logging.DEBUG)
+  console_handler = logging.StreamHandler()
+  cw_handler = watchtower.CloudWatchLogHandler(log_group='cruddur')
+  LOGGER.addHandler(console_handler)
+  LOGGER.addHandler(cw_handler)
+  LOGGER.info("test_log")
+  ```
+  ```
+  @app.after_request
+  def after_request(response):
+      timestamp = strftime('[%Y-%b-%d %H:%M]')
+      LOGGER.error('%s %s %s %s %s %s', timestamp, request.remote_addr, request.method, request.scheme, request.full_path, response.status)
+      return response
+  ```
+  Added to `home_activities.py`:
+  
+  `LOGGER.info("HomeActivities")`
+  
+ I set Environment Variables in the backend-flask in the `docker-compose.yml` file:
+ ```
+ AWS_DEFAULT_REGION: "${AWS_DEFAULT_REGION}"
+ AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+ AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+ ```
+ Ran docker compose up and it worked, data was sent to AWS CloudWatch
+ 
+ ![aws_cloudwatch](./assets/aws-log-streams.png)
+ 
+ ![aws_cloudwatch](./assets/aws-log-event.png)
+
+  
 
       
       
