@@ -83,7 +83,8 @@ const signOut = async () => {
 }
 ```
 - Ran docker compose up just to be sure it doesnt throw errors, it did made necessary corrections and it worked.
-### Signin Page
+- 
+### Implemented Signin Page
 - Updated `SigninPage.js` in pages folder with:
 ```
 import { Auth } from 'aws-amplify';
@@ -143,6 +144,121 @@ const onsubmit = async (event) => {
   
   ![cruddur_signin_page](./assets/working-signin-page.png)
   
+### Implemented Signup Page
+- Updated the following code in `SignupPage.js`
+```
+import { Auth } from 'aws-amplify';
+
+const onsubmit = async (event) => {
+  event.preventDefault();
+  setErrors('')
+  try {
+      const { user } = await Auth.signUp({
+        username: email,
+        password: password,
+        attributes: {
+            name: name,
+            email: email,
+            preferred_username: username,
+        },
+        autoSignIn: { // optional - enables auto sign in after user is confirmed
+            enabled: true,
+        }
+      });
+      console.log(user);
+      window.location.href = `/confirm?email=${email}`
+  } catch (error) {
+      console.log(error);
+      setErrors(error.message)
+  }
+  return false
+}
+```
+
+### Implemented Confirmation Page
+- Updated `ConfirmationPage.js` with:
+```
+import { Auth } from 'aws-amplify';
+
+const resend_code = async (event) => {
+  setErrors('')
+  try {
+    await Auth.resendSignUp(email);
+    console.log('code resent successfully');
+    setCodeSent(true)
+  } catch (err) {
+    // does not return a code
+    // does cognito always return english
+    // for this to be an okay match?
+    console.log(err)
+    if (err.message == 'Username cannot be empty'){
+      setErrors("You need to provide an email in order to send Resend Activiation Code")   
+    } else if (err.message == "Username/client id combination not found."){
+      setErrors("Email is invalid or cannot be found.")   
+    }
+  }
+}
+
+const onsubmit = async (event) => {
+  event.preventDefault();
+  setErrors('')
+  try {
+    await Auth.confirmSignUp(email, code);
+    window.location.href = "/"
+  } catch (error) {
+    setErrors(error.message)
+  }
+  return false
+}
+```
+- Ran docker compose up didnt work due to checking both email and username when creating UserPool in AWS Cognito.
+- Deleted user pool and created a new one checking the email box only.
+- Copied and changed User Pool and Client Pool ID into my Environment Variables in my docker compose file.
+- Ran docker compose up again and signed in, got a confirmation page, was sent an email with the confirmation code logged in and it worked.
+
+![cruddur_confirmation_page](./assets/cruddur-confirmation-page.png)
+
+![cruddur_homepage](./assets/cruddur-page.png)
+
+![aws_coghito_user_pool](./assets/aws-user-pool.png)
+
+### Implemented Recovery Page
+Updated `RecoverPage.js` with:
+```
+import { Auth } from 'aws-amplify';
+
+const onsubmit_send_code = async (event) => {
+  event.preventDefault();
+  setCognitoErrors('')
+  Auth.forgotPassword(username)
+  .then((data) => setFormState('confirm_code') )
+  .catch((err) => setCognitoErrors(err.message) );
+  return false
+}
+
+const onsubmit_confirm_code = async (event) => {
+  event.preventDefault();
+  setCognitoErrors('')
+  if (password == passwordAgain){
+    Auth.forgotPasswordSubmit(username, code, password)
+    .then((data) => setFormState('success'))
+    .catch((err) => setCognitoErrors(err.message) );
+  } else {
+    setCognitoErrors('Passwords do not match')
+  }
+  return false
+}
+```
+- Clicked on Forgot password which took me to recover password page.
+- Put in my email address. 
+- It sent me a recovery code which i put in with a new password in the recover password page.
+- Signed in again and it worked.
+
+![recover_password_page](./assets/recover-password-page.png)
+
+![[recover_password_page]](./assets/recover-password-signin-page.png)
+
+![reset_password_page](./assets/reset-password-page.png)
 
 
 
