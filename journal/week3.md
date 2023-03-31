@@ -307,6 +307,7 @@ def data_home():
   return data, 200
 ```
 - The crudder HomePage with the backend-flask now worked.
+
 - Created a folder Lib and inside of it a file`cognito_jwk_token.py` in backend-flask:
 ```
 import time
@@ -423,10 +424,66 @@ class CognitoJwtToken:
 
         self.claims = claims 
         return claims 
-    ```
+```
     
-    - Updated recruitment.txt file with:
+   - Updated recruitment.txt file with:
     `Flask-AWSCognito`
-    -Installed it using:
+    
+   - Installed it using:
     `pip install -r requirements.txt`
-    - Updated `Homeactivities
+    
+   - Updated `Home_activities.py`
+   ```
+   def run(cognito_user_id=None)
+   
+   if cognito_user_id != None:
+        extra_crud = {
+          'uuid': '248959df-3079-4947-b847-9e0892d1bab4',
+          'handle':  'Lore',
+          'message': 'My dear brother, it the humans that are the problem',
+          'created_at': (now - timedelta(hours=1)).isoformat(),
+          'expires_at': (now + timedelta(hours=12)).isoformat(),
+          'likes': 1042,
+          'replies': []
+        }
+        results.insert(0,extra_crud)
+   ```
+   - Updated `ProfileInfo.js` file in frontend-react.js with:
+   ```
+   try {
+        await Auth.signOut({ global: true });
+        window.location.href = "/"
+        localStorage.removeItem("access_token")
+   ```
+   - Updated `app.py` file with:
+   ```
+   from lib.cognito_jwt_token import CognitoJwtToken, extract_access_token, TokenVerifyError
+   
+   cognito_jwt_token = CognitoJwtToken(
+  user_pool_id=os.getenv("AWS_COGNITO_USER_POOL_ID"), 
+  user_pool_client_id=os.getenv("AWS_COGNITO_USER_POOL_CLIENT_ID"),
+  region=os.getenv("AWS_DEFAULT_REGION")
+ )
+ 
+ data = HomeActivities.run()
+  access_token = extract_access_token(request.headers)
+  try:
+    claims = cognito_jwt_token.verify(access_token)
+    # authenicatied request
+    app.logger.debug("authenicated")
+    app.logger.debug(claims)
+    app.logger.debug(claims['username'])
+    data = HomeActivities.run(cognito_user_id=claims['username'])
+  except TokenVerifyError as e:
+    # unauthenicatied request
+    app.logger.debug(e)
+    app.logger.debug("unauthenicated")
+    data = HomeActivities.run()
+  return data, 200
+```
+- Then ran docker compose up, though didnt work immediately but after much debugging finally worked and I could sign in and out with the token returning data.
+
+![cruddur_token_return_data](./assets/token-return-data.png)
+
+   
+      
