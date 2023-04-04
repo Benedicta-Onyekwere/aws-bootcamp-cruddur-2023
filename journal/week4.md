@@ -74,6 +74,7 @@ psql cruddur < db/schema.sql -h localhost -U postgres
 Password for user postgres: 
 CREATE EXTENSION
 ```
+### Shell Script to Connect to DB
 - Created and exported a Connection Url string which is a way of providing all the details it needs to authenticate to a server.
 ```
 postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]
@@ -81,7 +82,7 @@ postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]
 export CONNECTION_URL="postgresql://postgres:password@127.0.0.1:5432/cruddur"
 gp env CONNECTION_URL="postgresql://postgres:pssword@127.0.0.1:5432/cruddur"
 ```
-- Create a `bin` folder and 3 files into it namely: `db-create, db-drop, db-schema-load` for bash scripting.
+- Created a `bin` folder that contain all my bashscripts such as `db-create, db-drop, db-schema-load` etc.
 - Added shebang `#! /usr/bin/bash` to all the files since they dont have extensions.Shell script to drop the database
 ### Shell script to drop the database
 - Added the following codes in the `bin/db-drop` file so that it can drop the database.
@@ -184,6 +185,177 @@ psql $CONNECTION_URL cruddur < $seed_path
 - Then executed the script using chmod u+x ./bin/db-seed.
 
 ![db_migrations](./assets/seed-database.png)
+
+- Checked db-connect to see the connections using `./bin/db-connect` and got :
+```
+cruddur=# \x on
+Expanded display is on.
+cruddur=# SELECT * FROM activities;
+-[ RECORD 1 ]----------+-------------------------------------
+uuid                   | ecd57d7a-e832-4440-b532-9c51aea10498
+user_uuid              | a05119b3-658f-4925-a5bc-0e31811d7b17
+message                | This was imported as seed data!
+replies_count          | 0
+reposts_count          | 0
+likes_count            | 0
+reply_to_activity_uuid | 
+expires_at             | 2023-04-14 01:34:31.392765
+created_at             | 2023-04-04 01:34:31.392765
+```
+### See what connections I am using
+- Created a file `db-sessions` in `bin` folder and added this code to it;
+```
+#! /usr/bin/bash 
+
+CYAN='\033[1;36m'
+NO_COLOR='\033[0m'
+LABEL="db-sessions"
+printf "${CYAN}== ${LABEL}${NO_COLOR}\n"
+
+if [ "$1" = "prod" ]; then
+  echo "Running in production mode"
+  URL=$PROD_CONNECTION_URL
+else
+  URL=$CONNECTION_URL
+fi
+
+NO_DB_URL=$(sed 's/\/cruddur//g' <<<"$URL")
+psql $NO_DB_URL -c "select pid as process_id, \
+       usename as user,  \
+       datname as db, \
+       client_addr, \
+       application_name as app,\
+       state \
+from pg_stat_activity;"
+```
+- Made it executable using; chmod u+x ./bin/db-sessions and got;
+```
+$  ./bin/db-sessions
+== db-sessions
+ process_id |   user   |    db    | client_addr | app  | state  
+------------+----------+----------+-------------+------+--------
+         25 |          |          |             |      | 
+         27 | postgres |          |             |      | 
+        196 | postgres | postgres | 172.18.0.1  | psql | active
+         23 |          |          |             |      | 
+         22 |          |          |             |      | 
+         24 |          |          |             |      | 
+(6 rows)
+```
+### Shell script to easily setup (reset) everything for the databases
+- Created a new file `db-setup` still in the `bin` folder where all the database bashscripts I created are and can be executed at once instead of repeated doing it individually when needed:
+```
+#! usr/bin/bash
+-e # stop if it fails at any point
+
+#echo "==== db-setup"
+
+bin_path="$(realpath .)/bin"
+
+source "$bin_path/db-drop"
+source "$bin_path/db-create"
+source "$bin_path/db-schema-load"
+source "$bin_path/db-seed"
+```
+-  Made it executable using; chmod u+x ./bin/db-setup and got:
+
+ ![image](https://user-images.githubusercontent.com/105982108/229690457-f61a32cb-b4a8-413a-aedc-45f4da8a3251.png)
+ 
+ - Added Postgres python driver which is a means to connect to postgres client to `requirements.txt` file in the backend-flask.
+```
+psycopg[binary]
+psycopg[pool]
+```
+- Installed it using:
+```
+pip install -r requirements.txt
+```
+https://www.psycopg.org/psycopg3/
+### DB Object and Connection Pool
+- Created a Connection Pool by creating a `db.py` file in the `lib` folder of the backend-flask and added:
+```
+import os
+from psycopg_pool import ConnectionPool
+
+
+connection_url = os.getenv("CONNECTION_URL")
+pool = ConnectionPool(connection_url)
+```
+- Added the Conection URL to Env Vars in my docker compose file:
+```
+ CONNECTION_URL: "${CONNECTION_URL}"
+ ```
+ - Added the following to the `home_activities.py` file:
+```
+ with pool.connection() as conn:
+        with conn.cursor() as cur:
+          cur.execute(sql)
+          # this will return a tuple
+          # the first field being the data
+          json = cur.fetchone()
+    return json[0]
+    return results
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
