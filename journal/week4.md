@@ -298,7 +298,7 @@ pool = ConnectionPool(connection_url)
 
 
 ```
-- Added the Conection URL to Env Vars in my docker compose file:
+- Added the Conection URL to Env Vars in my docker compose file but commented the initial one because in the backend-flask shell it only recognised the other, hence used it otherwise will keep getting error connection pool -1:
 ```
  CONNECTION_URL: "postgresql://postgres:password@127.0.0.1:5432/cruddur"
  CONNECTION_URL: "postgresql://postgres:password@db:5432/cruddur"
@@ -308,7 +308,9 @@ pool = ConnectionPool(connection_url)
 from datetime import datetime, timedelta, timezone
 from opentelemetry import trace
 from lib.db import pool, query_wrap_object, query_wrap_array
+
 tracer = trace.get_tracer("home.activities")
+
 class HomeActivities:
   def run(cognito_user_id=None):
     print("HOME ACTIVITY")
@@ -317,10 +319,10 @@ class HomeActivities:
       span = trace.get_current_span()
       now = datetime.now(timezone.utc).astimezone()
       span.set_attribute("app.now", now.isoformat())
+
       sql = query_wrap_array("""
       SELECT
         activities.uuid,
-        activities.user_uuid,
         users.display_name,
         users.handle,
         activities.message,
@@ -329,33 +331,32 @@ class HomeActivities:
         activities.likes_count,
         activities.reply_to_activity_uuid,
         activities.expires_at,
-        activities.created_at,
         activities.created_at
       FROM public.activities
-      ORDER BY activities.id
       LEFT JOIN public.users ON users.uuid = activities.user_uuid
       ORDER BY activities.created_at DESC
       """)
       print("########==========")
       print(sql)
       with pool.connection() as conn:
-        conn.execute(sql)
-        json = con.fetchone()
-        print(json)
-
-      span.set_attribute("app.result_length", len(results))
-      return results
         with conn.cursor() as cur:
           cur.execute(sql)
           # this will return a tuple
           # the first field being the data
           json = cur.fetchone()
       return json[0]
-      ```
+  ```
+- The query finally worked after all the debugging and manipulations.
+
+![query_worked](./aasets/cruddur-query.png)
+
+- Then re-started my AWS RDS instance and it showed available which means it worked and also echoed the endpoint on my terminal and it also worked.
 
 
 
 
+
+![aws_rds_instance](./assets/aws-rds.png)
 
 
 
