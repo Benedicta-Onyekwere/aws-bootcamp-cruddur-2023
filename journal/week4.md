@@ -348,19 +348,165 @@ class HomeActivities:
   ```
 - The query finally worked after all the debugging and manipulations.
 
-![query_worked](./aasets/cruddur-query.png)
-
-- Then re-started my AWS RDS instance and it showed available which means it worked and also echoed the endpoint on my terminal and it also worked.
-
-
-
-
+![query_worked](./assets/cruddur-query.png)
 
 ![aws_rds_instance](./assets/aws-rds.png)
 
+- Then re-started my AWS RDS instance and it showed available which means it worked and also echoed the endpoint on my terminal and it also worked.
+
+### Connect to RDS via Gitpod
+- In order to connect my AWS RDS instance to my gitpod, i needed to get my gitpod Ip address in order to add it to the inbound traafic on port 5432 for postgesql and i did that using:
+```
+GITPOD_IP=$(curl ifconfig.me)
+```
+- Created an inbound rule for Postgres (5432) and provided the GITPOD ID.
+- Got the security group rule id and added it to my Environment variables so it can easily be modified in the future from the terminal here in Gitpod.
+```
+export DB_SG_ID=sg-063517d50c666c42e
+gp env DB_SG_ID=sg-063517d50c666c42e
+export DB_SG_RULE_ID=sgr-0e581d11f2f1feff9 
+gp env DB_SG_RULE_ID=sgr-0e581d11f2f1feff9
+```
+- Whenever security groups needs to be updated, the folowing command can be used for access:
+```
+aws ec2 modify-security-group-rules \
+    --group-id $DB_SG_ID \
+    --security-group-rules "SecurityGroupRuleId=$DB_SG_RULE_ID,SecurityGroupRule={IpProtocol=tcp,FromPort=5432,ToPort=5432,CidrIpv4=$GITPOD_IP/32}"
+```
+### Test remote access
+- To do this i created a connection url
+```
+postgresql://root:cruddurdbpassword@cruddur-db-instance.cywysqjvjxra.us-east-1.rds.amazonaws.com:5432/cruddur
+```
+- Tested it to see that it works using:
+```
+psql postgresql://root:cruddurdbpassword@cruddur-db-instance.cywysqjvjxra.us-east-1.rds.amazonaws.com:5432/cruddur
+```
+- It worked, then add it to my Environment variables in order to update the URL for production use case using:
+```
+export PROD_CONNECTION_URL=postgresql://root:cruddurdbpassword@cruddur-db-instance.cywysqjvjxra.us-east-1.rds.amazonaws.com:5432/cruddur
+gp env PROD_CONNECTION_URL=postgresql://root:cruddurdbpassword@cruddur-db-instance.cywysqjvjxra.us-east-1.rds.amazonaws.com:5432/cruddur
+```
+- Updated `db-connect` and `db-schema-load` bash scripts.
+- Updated Gitpod IP on new Environment variable:
+```
+    command: |
+      export GITPOD_IP=$(curl ifconfig.me)
+      source "$THEIA_WORKSPACE_ROOT/backend-flask/db-update-sg-rule"
+```
+
+### Setup Cognito Post Confirmation Lambda
+#### Created the handler function
+- By first creating lambda cruddur post confirmation the in same VPC as my RDS instance Python 3.8
+- Created a lambdas folder and added the function into a file `cruddur-post-confirmation.py` still in the backend-flask.
+- Updated my `schema.sql`file.
+```
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+DROP TABLE IF EXISTS public.users;
+DROP TABLE IF EXISTS public.activities;
+
+
+CREATE TABLE public.users (
+  uuid UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  display_name text NOT NULL,
+  handle text NOT NULL,
+  email text NOT NULL,
+  cognito_user_id text NOT NULL,
+  created_at TIMESTAMP default current_timestamp NOT NULL
+);
+
+CREATE TABLE public.activities (
+  uuid UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_uuid UUID NOT NULL,
+  message text NOT NULL,
+  replies_count integer DEFAULT 0,
+  reposts_count integer DEFAULT 0,
+  likes_count integer DEFAULT 0,
+  reply_to_activity_uuid integer,
+  expires_at TIMESTAMP,
+  created_at TIMESTAMP default current_timestamp NOT NULL
+);
+```
+- Copied, pasted and saved the function in lambda.
+The Function
+```
+import json
+import psycopg2
+import os
+
+def lambda_handler(event, context):
+    user = event['request']['userAttributes']
+    print('userAttributes')
+    print(user)
+
+    user_display_name  = user['name']
+    user_email         = user['email']
+    user_handle        = user['preferred_username']
+    user_cognito_id    = user['sub']
+    try:
+      print('entered-try')
+      sql = f"""
+         INSERT INTO public.users (
+          display_name, 
+          email,
+          handle, 
+          cognito_user_id
+          ) 
+        VALUES(
+          '{user_display_name}', 
+          '{user_email}', 
+          '{user_handle}', 
+          '{user_cognito_id}'
+        )
+      """
+      print('SQL Statement ----')
+      print(sql)
+      conn = psycopg2.connect(os.getenv('CONNECTION_URL'))
+      cur = conn.cursor()
+      cur.execute(sql)
+      conn.commit() 
+
+    except (Exception, psycopg2.DatabaseError) as error:
+      print(error)
+    finally:
+      if conn is not None:
+          cur.close()
+          conn.close()
+          print('Database connection closed.')
+    return event
+
+```
+
+![aws_lambda](./assets/lambda-function.png)
+
+- Added the CONNECTION URL that of the Prod precisely to the Lambda Environment variables:
+```
+CONNECTION_URL=postgresql://root:cruddurdbpassword@cruddur-db-instance.cywysqjvjxra.us-east-1.rds.amazonaws.com:5432/cruddur
+```
+- Added a layer for psycopg2 with one of the precompiled versions of this layer are available publicly on AWS freely to add to my function by ARN reference.
+```
+arn:aws:lambda:us-east-1:898466741470:layer:psycopg2-py38:2
+```
+- Added the Post confirmation Lambda trigger to Lambda triggers in Cognito cruddur pool user in the user pool properties which will cause a trigger whenever i sign up on cruddur.
+- To monitor events on my RDS instance i check the logs and events which has CloudWatch which is what i used in monitoring my event.
+- Made sure there were no users in Cognito before going to trigger it by signing up in cruddur homepage, didnt work got error "User cannot be confirmed. Current status is Confirmed" and later a Connection error due to lambda not being attached to the default VPC of the RDS instance.
+- To attach this clicked on configuration, permission to create an IAM role policy for an ec2, clicked on attach, used the one for AWSLAMBDAVPCEXECUTIONROLE  
+- Created and attached the policy, added the policy permission.
+- In the lambda clicked on Configuration and then VPC added my default with the security group, saved and refreshed the Lambda and it was attached.
+- Deleted users again in cognito, signed up got cofirmation code confirmed and it worked took me straight to the homepage, checked to see if the connection truly worked by checking the `db-connect prod` to see if the user was created. I had an error of "Did not findny relations", checked my CloudWatch gave an error "public.users does not exist".
+- After much stressful debugging of combing through my files found out I mistakenly omitted quotes in the schema path in the `schema-load` file and after making the correction everything worked. 
+
+  
+![cruddur](./assets/cruddur-confirmation.png)
 
 
 
+![aws cloudwatch](./assets/cloudwatch-log.png)
+
+
+
+
+![image](https://user-images.githubusercontent.com/105982108/231618949-252d1094-997e-4970-a2ae-a9e52e5360c6.png)
 
 
 
