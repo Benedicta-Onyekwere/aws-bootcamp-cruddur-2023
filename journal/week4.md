@@ -494,7 +494,7 @@ arn:aws:lambda:us-east-1:898466741470:layer:psycopg2-py38:2
 - Created and attached the policy, added the policy permission.
 - In the lambda clicked on Configuration and then VPC added my default with the security group, saved and refreshed the Lambda and it was attached.
 - Deleted users again in cognito, signed up got cofirmation code confirmed and it worked took me straight to the homepage, checked to see if the connection truly worked by checking the `db-connect prod` to see if the user was created. I had an error of "Did not findny relations", checked my CloudWatch gave an error "public.users does not exist".
-- After much stressful debugging of combing through my files found out I mistakenly omitted quotes in the schema path in the `schema-load` file and after making the correction everything worked. 
+- After much debugging and combing through my files found out I mistakenly omitted quotation marks in the schema path in the `schema-load` file and after making the correction everything worked. 
 
   
 ![cruddur](./assets/cruddur-confirmation.png)
@@ -508,6 +508,317 @@ arn:aws:lambda:us-east-1:898466741470:layer:psycopg2-py38:2
 
 ![image](https://user-images.githubusercontent.com/105982108/231618949-252d1094-997e-4970-a2ae-a9e52e5360c6.png)
 
+
+# Create Activities
+- Updated `db.py` file in the backend-flask/lib with:
+```
+class Db:
+  def __init__(self):
+    self.init_pool()
+
+  def init_pool(self):
+    connection_url = os.getenv("CONNECTION_URL")
+    self.pool = ConnectionPool(connection_url)
+  # we want to commit data such as an insert
+  def query_commit(self):
+    try:
+      conn = self.pool.connection()
+      cur =  conn.cursor()
+      cur.execute(sql)
+      conn.commit() 
+    except Exception as err:
+      self.print_sql_err(err)
+      #conn.rollback()
+  # when we want to return a json object
+  def query_array_json(self,sql):
+    print("SQL STATEMENT-[array]------")
+    print(sql + "\n")
+    wrapped_sql = self.query_wrap_array(sql)
+    with self.pool.connection() as conn:
+      with conn.cursor() as cur:
+        cur.execute(wrapped_sql)
+        json = cur.fetchone()
+        return json[0]
+  # When we want to return an array of json objects
+  def query_object_json(self,sql):
+    print("SQL STATEMENT-[object]-----")
+    print(sql + "\n")
+    wrapped_sql = self.query_wrap_object(sql)
+    with self.pool.connection() as conn:
+      with conn.cursor() as cur:
+        cur.execute(wrapped_sql)
+        json = cur.fetchone()
+        return json[0]
+
+  def query_wrap_object(self,template):
+    sql = f"""
+    (SELECT COALESCE(row_to_json(object_row),'{{}}'::json) FROM (
+    {template}
+    ) object_row);
+    """
+    return sql
+  def query_wrap_array(self,template):
+    sql = f"""
+    (SELECT COALESCE(array_to_json(array_agg(row_to_json(array_row))),'[]'::json) FROM (
+    {template}
+    ) array_row);
+    """
+    return sql
+  def print_sql_err(self,err):
+    # get details about the exception
+    err_type, err_obj, traceback = sys.exc_info()
+
+    # get the line number when exception occured
+    line_num = traceback.tb_lineno
+
+    # print the connect() error
+    print ("\npsycopg ERROR:", err, "on line number:", line_num)
+    print ("psycopg traceback:", traceback, "-- type:", err_type)
+
+    # psycopg2 extensions.Diagnostics object attribute
+    print ("\nextensions.Diagnostics:", err.diag)
+
+    # print the pgcode and pgerror exceptions
+    print ("pgerror:", err.pgerror)
+    print ("pgcode:", err.pgcode, "\n")
+
+db = Db()
+```
+
+- Also updated `create_activity.py` and `home_activity.py` files in the backend-flask/services respectively with :
+```
+# create_activity.py
+
+import uuid
+from datetime import datetime, timedelta, timezone
+
+# from lib.db import db
+
+class CreateActivity:
+  def run(message, user_handle, ttl):
+    model = {
+      'errors': None,
+      'data': None
+    }
+
+    now = datetime.now(timezone.utc).astimezone()
+
+    if (ttl == '30-days'):
+      ttl_offset = timedelta(days=30) 
+    elif (ttl == '7-days'):
+      ttl_offset = timedelta(days=7) 
+    elif (ttl == '3-days'):
+      ttl_offset = timedelta(days=3) 
+    elif (ttl == '1-day'):
+      ttl_offset = timedelta(days=1) 
+    elif (ttl == '12-hours'):
+      ttl_offset = timedelta(hours=12) 
+    elif (ttl == '3-hours'):
+      ttl_offset = timedelta(hours=3) 
+    elif (ttl == '1-hour'):
+      ttl_offset = timedelta(hours=1) 
+    else:
+      model['errors'] = ['ttl_blank']
+
+    if user_handle == None or len(user_handle) < 1:
+      model['errors'] = ['user_handle_blank']
+
+    if message == None or len(message) < 1:
+      model['errors'] = ['message_blank'] 
+    elif len(message) > 280:
+      model['errors'] = ['message_exceed_max_chars'] 
+
+    if model['errors']:
+      model['data'] = {
+        'handle':  user_handle,
+        'message': message
+      }   
+    else:
+      self.create_activity()
+      model['data'] = {
+        'uuid': uuid.uuid4(),
+        'display_name': 'Andrew Brown',
+        'handle':  user_handle,
+        'message': message,
+        'created_at': now.isoformat(),
+        'expires_at': (now + ttl_offset).isoformat()
+      }
+    return model
+  def create_activity(user_uuid, message, expires_at):
+    sql = f"""
+    INSERT INTO (
+      user_uuid,
+      message,
+      expires_at
+    )
+    VALUES (
+      "{user_uuid}",
+      "{message}",
+      "{expires_at}"
+    )
+    """
+    #query_commit(sql)
+```
+
+```
+# create home_activity.py
+
+from datetime import datetime, timedelta, timezone
+from opentelemetry import trace
+
+from lib.db import db
+
+#tracer = trace.get_tracer("home.activities")
+
+class HomeActivities:
+  def run(cognito_user_id=None):
+    #logger.info("HomeActivities")
+    #with tracer.start_as_current_span("home-activites-mock-data"):
+    #  span = trace.get_current_span()
+    #  now = datetime.now(timezone.utc).astimezone()
+    #  span.set_attribute("app.now", now.isoformat())
+        sql = db.template('activities','home')
+    results = db.query_array_json(sql)
+    return results
+```
+- Created in `db` folder an `sql` folder and within it an activities folder in which the different activities where now put in different files namely: `create.sql`, `home.sql`, and `object.sql`
+```
+# create.sql
+
+INSERT INTO public.activities (
+  user_uuid,
+  message,
+  expires_at
+)
+VALUES (
+  (SELECT uuid 
+    FROM public.users 
+    WHERE users.handle = %(handle)s
+    LIMIT 1
+  ),
+  %(message)s,
+  %(expires_at)s
+) RETURNING uuid;
+```
+```
+# home.sql
+
+SELECT
+  activities.uuid,
+  users.display_name,
+  users.handle,
+  activities.message,
+  activities.replies_count,
+  activities.reposts_count,
+  activities.likes_count,
+  activities.reply_to_activity_uuid,
+  activities.expires_at,
+  activities.created_at
+FROM public.activities
+LEFT JOIN public.users ON users.uuid = activities.user_uuid
+```
+```
+# object.sql
+
+SELECT
+  activities.uuid,
+  users.display_name,
+  users.handle,
+  activities.message,
+  activities.created_at,
+  activities.expires_at
+FROM public.activities
+INNER JOIN public.users ON users.uuid = activities.user_uuid 
+WHERE 
+  activities.uuid = %(uuid)s
+```
+- Then updated the `cruddur-cofirmation-post.py` and added and saved it to lambda to avoid having sql injection because if it has it people can read and write anything in the database:
+```
+import json
+import psycopg2
+import os
+
+
+def lambda_handler(event, context):
+    user = event['request']['userAttributes']
+    user_display_name = user['name']
+    user_email = user['email']
+    user_handle = user['preferred_username']
+    user_cognito_id = user['sub']
+    
+    try:
+        sql = """
+            INSERT INTO public.users (
+                display_name, 
+                email,
+                handle, 
+                cognito_user_id
+            ) 
+            VALUES (%s, %s, %s, %s)
+        """
+        
+        params = [
+            user_display_name,
+            user_email,
+            user_handle,
+            user_cognito_id
+        ]
+        
+        with psycopg2.connect(os.getenv('CONNECTION_URL')) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+            conn.commit()
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+    else:
+        print("Data inserted successfully")
+    finally:
+        print('Database connection closed.')
+    
+    return event
+```
+- Signed into Cruddur and posted a crud, didnt work kept getting error `'NotNullViolation' object has no attribute 'pgerror'`until i updated the following: `cruddur-cofirmation-post.py` as shown above, 
+ The ActivityForm component in pages/HomeFeedPage.js to pass the user_handle prop as follows:
+```
+<ActivityForm
+  user_handle={user}
+  popped={popped}
+  setPopped={setPopped}
+  setActivities={setActivities}
+/>
+```
+
+In the components/ActivityForm.js component, I updated the fetch request body to include the user_handle:
+```
+body: JSON.stringify({
+  user_handle: props.user_handle.handle,
+  message: message,
+  ttl: ttl
+}),
+```
+
+In app.py, under the /api/activities route, I assigned the user_handle variable as follows:
+```
+@app.route("/api/activities", methods=['POST','OPTIONS'])
+@cross_origin()
+def data_activities():
+  user_handle  = 'andrewbrown'
+  user_handle  = request.json['user_handle']
+  message = request.json['message']
+  ttl = request.json['ttl']
+  model = CreateActivity.run(message, user_handle, ttl)
+```
+- It finally worked.
+
+![image](https://user-images.githubusercontent.com/105982108/231988056-1f3c3ac8-83c5-4264-9014-d04084872125.png)
+
+
+- Confirmed it worked by checking if data dropped in the `PROD_CONNECTION_URL` and it did.
+
+![image](https://user-images.githubusercontent.com/105982108/231959802-80b6c556-52fc-4a57-ac66-3f1a21a26ef4.png)
+
+    
 
 
 
