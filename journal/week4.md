@@ -509,7 +509,7 @@ arn:aws:lambda:us-east-1:898466741470:layer:psycopg2-py38:2
 ![image](https://user-images.githubusercontent.com/105982108/231618949-252d1094-997e-4970-a2ae-a9e52e5360c6.png)
 
 
-# Create Activities
+### Create Activities
 - Updated `db.py` file in the backend-flask/lib with:
 ```
 class Db:
