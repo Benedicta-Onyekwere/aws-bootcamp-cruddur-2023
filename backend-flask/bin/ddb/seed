@@ -34,10 +34,10 @@ def get_user_uuids():
         )
   """
   users = db.query_array_json(sql,{
-    'my_handle':  'andrewbrown',
+    'my_handle':  'Bennie',
     'other_handle': 'bayko'
   })
-  my_user    = next((item for item in users if item["handle"] == 'andrewbrown'), None)
+  my_user    = next((item for item in users if item["handle"] == 'Bennie'), None)
   other_user = next((item for item in users if item["handle"] == 'bayko'), None)
   results = {
     'my_user': my_user,
@@ -231,6 +231,7 @@ for i in range(len(lines)):
     raise 'invalid line'
 
   created_at = (now + timedelta(minutes=i)).isoformat()
+  #created_at = (now + timedelta(hours=-3) + timedelta(minutes=minute)).isoformat()
   create_message(
     client=ddb,
     message_group_uuid=message_group_uuid,
