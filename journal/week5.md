@@ -1136,6 +1136,7 @@ if __name__ == "__main__":
 ```
 
 #### Implement Cognito in the `backend-flask/services` folder:
+- Updated files and added a new file in the `backend-flask/services` folder:
 - Updated `message_groups.py` file:
 ```
 from datetime import datetime, timedelta, timezone
@@ -1278,6 +1279,18 @@ class CreateMessage:
       model['data'] = data
     return model
 ```
+- Created `users_short.py` file
+```
+from lib.db import db
+
+class UsersShort:
+  def run(handle):
+    sql = db.template('users','short')
+    results = db.query_object_json(sql,{
+      'handle': handle
+    })
+    return results
+```    
 ### Implement Cognito User sql in backend-flask
 #### Create cognito_user_id
 - In the `backend-flask/db/sql/users` folder, created a `uuid_from_cognito_user_id.sql` file:
@@ -1320,7 +1333,7 @@ WHERE
   users.handle = %(handle)s
 ```  
 ### Implement Cognito in frontend-react.js
-- Due to error Cognito  tokenkey not found or expired, had to update the following files with the Authorization of token access key and CheckAuth.
+- Due to error Cognito  tokennot found or expired, had to update the following files with the Authorization of token access key and CheckAuth and also created a new file.
 - Updated `HomeFeedPage.js` file in the `frontend-react.js/src/pages` folder.
 ```
 import './HomeFeedPage.css';
@@ -1630,7 +1643,7 @@ export default function MessageGroupPage() {
         method: "GET"
       });
 ```
-- In the `frontend-react.js/src/components` folder, updated and created the following files:
+- In the `frontend-react.js/src/components` folder, updated files and added a new file:
 - Updated `MessageForm.js` file:
 ```
  const res = await fetch(backend_url, {
@@ -1775,14 +1788,14 @@ export default checkAuth;
 ![image](https://user-images.githubusercontent.com/105982108/234984127-52783f63-146c-4adf-8e64-6a6b102db5fc.png)
 
 - Kept getting errors "Not Subscriptable and expired token etc" fixed them by updating some of the following file:
-- Update `seed.sql` file in `backend-flask/db` with my own cognito user details:
+- Updated `seed.sql` file in `backend-flask/db` with my own cognito user details:
 ```
 -- this file was manually created
 INSERT INTO public.users (display_name, email, handle, cognito_user_id)
 VALUES
   ('Benedicta Onyekwere','onyekwerebenedicta@gmail.com' , 'Bennie' ,'MOCK'),
   ('Andrew Bayko','bayko@exampro.co' , 'bayko' ,'MOCK');
-
+  
 INSERT INTO public.activities (user_uuid, message, expires_at)
 VALUES
   (
@@ -1834,6 +1847,39 @@ const loadMessageGroupData = async () => {
 - After much manipulations, debugging and updating files, the conversations finally showed.
 
 ![image](https://user-images.githubusercontent.com/105982108/235029520-2a0311b0-4bcc-450f-a2f9-10997651b44b.png)
+
+-   Inputted my own message and it worked.
+
+![image](https://user-images.githubusercontent.com/105982108/235036580-8c5bc057-e705-4909-97cf-f8e02e4c5f6f.png)
+
+- Created a new user "Londo Mollari" and updated `seed.sql` file in `backend-flask/db`.
+```
+-- this file was manually created
+INSERT INTO public.users (display_name, email, handle, cognito_user_id)
+VALUES
+  ('Benedicta Onyekwere','onyekwerebenedicta@gmail.com' , 'Bennie' ,'MOCK'),
+  ('Andrew Bayko','bayko@exampro.co' , 'bayko' ,'MOCK');
+  ('Londo Mollari','lmollari@centari.com' ,'londo' ,'MOCK');
+
+INSERT INTO public.activities (user_uuid, message, expires_at)
+VALUES
+  (
+    (SELECT uuid from public.users WHERE users.handle = 'Bennie' LIMIT 1),
+    'This was imported as seed data!',
+    current_timestamp + interval '10 day'
+  )
+```
+- After refreshing browser several times got no errors but Londo user didnt appear until i added `/new/londo` at the end before it worked:
+```
+https://<my_frontend_address>/messages/new/londo
+```
+- Then inputted my message clicked and it worked.
+
+![image](https://user-images.githubusercontent.com/105982108/235080927-1adfafdb-6dd7-4914-9583-a64427ade3b9.png)
+  
+
+
+
 
 
 
