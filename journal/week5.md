@@ -1787,7 +1787,7 @@ export default checkAuth;
 
 ![image](https://user-images.githubusercontent.com/105982108/234984127-52783f63-146c-4adf-8e64-6a6b102db5fc.png)
 
-- Kept getting errors "Not Subscriptable and expired token etc" fixed them by updating some of the following file:
+- Kept getting errors "None Subscriptable and expired token etc" fixed them by using `./bin/db/update-cognito-user-ids`, for the not subscriptable, signing out and back in again for expired token and updating some of the following files, :
 - Updated `seed.sql` file in `backend-flask/db` with my own cognito user details:
 ```
 -- this file was manually created
@@ -1873,10 +1873,165 @@ VALUES
 ```
 https://<my_frontend_address>/messages/new/londo
 ```
-- Then inputted my message clicked and it worked.
+- Then inputted my message clicked, it redirected successfully and worked.
 
 ![image](https://user-images.githubusercontent.com/105982108/235080927-1adfafdb-6dd7-4914-9583-a64427ade3b9.png)
   
+### Implementing DynamoDB Stream
+### DynamoDB Stream Trigger to Update Message Groups
+- In order to start or do this, the data has to be put in dynamodb and a real table has to be created.
+- - Updated `schema-load` file in `backend-flask/bin/ddb` folder with:
+```
+#!/usr/bin/env python3
+
+import boto3
+import sys
+
+attrs = {
+  'endpoint_url': 'http://localhost:8000'
+}
+
+if len(sys.argv) == 2:
+  if "prod" in sys.argv[1]:
+    attrs = {}
+
+ddb = boto3.client('dynamodb',**attrs)
+
+table_name = 'cruddur-messages'
+
+
+response = ddb.create_table(
+  TableName=table_name,
+  AttributeDefinitions=[
+    {
+      'AttributeName': 'message_group_uuid',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'pk',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'sk',
+      'AttributeType': 'S'
+    },
+  ],
+  KeySchema=[
+    {
+      'AttributeName': 'pk',
+      'KeyType': 'HASH'
+    },
+    {
+      'AttributeName': 'sk',
+      'KeyType': 'RANGE'
+    },
+  ],
+  GlobalSecondaryIndexes= [{
+    'IndexName':'message-group-sk-index',
+    'KeySchema':[{
+      'AttributeName': 'message_group_uuid',
+      'KeyType': 'HASH'
+    },{
+      'AttributeName': 'sk',
+      'KeyType': 'RANGE'
+    }],
+    'Projection': {
+      'ProjectionType': 'ALL'
+    },
+    'ProvisionedThroughput': {
+      'ReadCapacityUnits': 5,
+      'WriteCapacityUnits': 5
+    },
+  }],
+  BillingMode='PROVISIONED',
+  ProvisionedThroughput={
+      'ReadCapacityUnits': 5,
+      'WriteCapacityUnits': 5
+  }
+)
+
+print(response)
+```
+- Hence, after having updated the `schema-load` file, I uploaded my data using:
+```
+./bin/ddb/schema-load prod
+```
+![image](https://user-images.githubusercontent.com/105982108/235280645-5944fa69-a2dc-41e2-b9fe-760d85fa2c90.png)
+
+- This worked and it was created in AWS DynomoDB.
+
+![image](https://user-images.githubusercontent.com/105982108/235280826-6b5a238a-2241-42fa-88ab-754f50505bb1.png)
+
+- Updated `docker-compose.yml` file by commenting the AWS Endpoint URL so the production URL can work.
+- Enabled streams on the table with "new image" attributes included. Did this on AWS DynamoDB by:
+- First clicking on Exports and Stream.
+- Turned on DynamoDB stream Details.
+- Clicked on New Image and it was created.
+- Created a VPC endpoint for dynamodb service on my VPC.
+- Created a Python Lambda function in my VPC.
+- Added function to `aws/lambdas` folder.
+- Function
+```
+import json
+import boto3
+from boto3.dynamodb.conditions import Key, Attr
+
+dynamodb = boto3.resource(
+ 'dynamodb',
+ region_name='ca-central-1',
+ endpoint_url="http://dynamodb.ca-central-1.amazonaws.com"
+)
+
+def lambda_handler(event, context):
+  print('event-data',event)
+
+  eventName = event['Records'][0]['eventName']
+  if (eventName == 'REMOVE'):
+    print("skip REMOVE event")
+    return
+  pk = event['Records'][0]['dynamodb']['Keys']['pk']['S']
+  sk = event['Records'][0]['dynamodb']['Keys']['sk']['S']
+  if pk.startswith('MSG#'):
+    group_uuid = pk.replace("MSG#","")
+    message = event['Records'][0]['dynamodb']['NewImage']['message']['S']
+    print("GRUP ===>",group_uuid,message)
+    
+    table_name = 'cruddur-messages'
+    index_name = 'message-group-sk-index'
+    table = dynamodb.Table(table_name)
+    data = table.query(
+      IndexName=index_name,
+      KeyConditionExpression=Key('message_group_uuid').eq(group_uuid)
+    )
+    print("RESP ===>",data['Items'])
+    
+    # recreate the message group rows with new SK value
+    for i in data['Items']:
+      delete_item = table.delete_item(Key={'pk': i['pk'], 'sk': i['sk']})
+      print("DELETE ===>",delete_item)
+      
+      response = table.put_item(
+        Item={
+          'pk': i['pk'],
+          'sk': sk,
+          'message_group_uuid':i['message_group_uuid'],
+          'message':message,
+          'user_display_name': i['user_display_name'],
+          'user_handle': i['user_handle'],
+          'user_uuid': i['user_uuid']
+        }
+      )
+      print("CREATE ===>",response)
+```
+- Added function as a trigger on the stream.
+- Granted the Lambda IamRole permission to read the Dynamodb stream events using the AWS managed permission policy of; `AWSLambdaInvocation-DynamoDB`.
+- Granted the Lambda IamRole permission to update table items by creating another permission policy inline; `cruddur-messaging-stream-dynomodb`.
+- Inputted and entered my message and it worked without giving any errors on CloudWatch.
+
+![image](https://user-images.githubusercontent.com/105982108/235286476-2e8b7e56-b308-49db-9685-29c639000a47.png)
+
+
+![image](https://user-images.githubusercontent.com/105982108/235286810-019c93a8-f8c6-4318-a437-b73d915dbffd.png)
 
 
 
