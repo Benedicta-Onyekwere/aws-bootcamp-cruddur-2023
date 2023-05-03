@@ -7,6 +7,7 @@ import sys
 from services.users_short import *
 from services.home_activities import *
 from services.notifications_activities import *
+from services.healthcheck_activities import *
 from services.user_activities import *
 from services.create_activity import *
 from services.create_reply import *
@@ -230,6 +231,11 @@ def data_home():
 def data_notifications():
   data = NotificationsActivities.run()
   return data, 200
+
+@app.route("/api/activities/healthcheck", methods=['GET'])
+def data_healthcheck():
+  data = HealthcheckActivities.run()
+  return {'success': True}, 200
 
 @app.route("/api/activities/@<string:handle>", methods=['GET'])
 #@xray_recorder.capture('activities_users')
