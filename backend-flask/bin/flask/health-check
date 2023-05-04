@@ -1,12 +1,14 @@
-#!/usr/bin/env python3
+#! /usr/bin/env python3
+
+
+"""
+This module checks if the Flask server is running.
+"""
 
 import urllib.request
 
 response = urllib.request.urlopen('http://localhost:4567/api/health-check')
 if response.getcode() == 200:
-  print("Flask server is running")
+    print("Flask server is running")
 else:
-  print("Flask server is not running")
-
-
-  
+    print("Flask server is not running")
