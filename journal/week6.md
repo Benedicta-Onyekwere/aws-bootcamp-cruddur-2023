@@ -308,4 +308,150 @@ aws ecs register-task-definition --cli-input-json file://aws/task-definitions/ba
 ```
 aws ecs register-task-definition --cli-input-json file://aws/task-definitions/frontend-react-js.json
 ```
-
+#### Create Security Group
+- Launched the `backend-flask` manually  and then through the console and continued with it on the AWS Console.
+- For the Networking aspect on the console had to create a new Security Group via the CLI but first had to get the default VPC using:
+```
+export DEFAULT_VPC_ID=$(aws ec2 describe-vpcs \
+--filters "Name=isDefault, Values=true" \
+--query "Vpcs[0].VpcId" \
+--output text)
+echo $DEFAULT_VPC_ID
+```
+- Authorized port 80 by opening the port via CLI using:
+```
+aws ec2 authorize-security-group-ingress \
+  --group-id $CRUD_SERVICE_SG \
+  --protocol tcp \
+  --port 80 \
+  --cidr 0.0.0.0/0
+```
+- Then created the Security Group for the default VPC using:
+```
+export CRUD_SERVICE_SG=$(aws ec2 create-security-group \
+  --group-name "crud-srv-sg" \
+  --description "Security group for Cruddur services on ECS" \
+  --vpc-id $DEFAULT_VPC_ID \
+  --query "GroupId" --output text)
+echo $CRUD_SERVICE_SG
+```
+- Finished creating tthe service on the console and started debugging the issues.
+- Attached CloudWatchFullAccessPolicy and modified the CruddurServiceExecutionPolicy to include AllowECRAccess.
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowSSMParameterStoreAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameters",
+                "ssm:GetParameter"
+            ],
+            "Resource": "arn:aws:ssm:us-east-1:914347776203:parameter/cruddur/backend-flask/*"
+        },
+        {
+            "Sid": "AllowECRAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+- The service now worked but the container was unhealthy, so created a file to and used commands that will get me into the container by doing the following:
+- Created a new json file in `aws/json/service-backen-flask.json` and added the following content to it:
+```
+{
+    "cluster": "cruddur",
+    "launchType": "FARGATE",
+    "desiredCount": 1,
+    "enableECSManagedTags": true,
+    "enableExecuteCommand": true,
+    // "loadBalancers": [
+    //   {
+    //       "targetGroupArn": "arn:aws:elasticloadbalancing:ca-central-1:387543059434:targetgroup/cruddur-backend-flask-tg/87ed2a3daf2d2b1d",
+    //       "containerName": "backend-flask",
+    //       "containerPort": 4567
+    //   }
+    // ],
+    "networkConfiguration": {
+      "awsvpcConfiguration": {
+        "assignPublicIp": "ENABLED",
+        "securityGroups": [
+          "sg-026fe9775bafd0dab"
+        ],
+        "subnets": [
+          "subnet-0f8b62ad6974a8242",
+          "subnet-0501847b87c744b3f",
+          "subnet-068fdb0d831af19b6",
+          "subnet-00f319ebba3f7822a",
+          "subnet-04c6bb6d2a56eef14",
+          "subnet-07fad2b0e92473b65"
+        ]
+      }
+    },
+    "serviceConnectConfiguration": {
+      "enabled": true,
+      "namespace": "cruddur",
+      "services": [
+        {
+          "portName": "backend-flask",
+          "discoveryName": "backend-flask",
+          "clientAliases": [{"port": 4567}]
+        }
+      ]
+    },
+    "propagateTags": "SERVICE",
+    "serviceName": "backend-flask",
+    "taskDefinition": "backend-flask"
+  }
+```
+- To get the Subnets attached to the default VPC used the following commands via CLI:
+```
+export DEFAULT_VPC_ID=$(aws ec2 describe-vpcs \
+--filters "Name=isDefault, Values=true" \
+--query "Vpcs[0].VpcId" \
+--output text)
+echo $DEFAULT_VPC_ID
+```
+```
+export DEFAULT_SUBNET_IDS=$(aws ec2 describe-subnets  \
+ --filters Name=vpc-id,Values=$DEFAULT_VPC_ID \
+ --query 'Subnets[*].SubnetId' \
+ --output json | jq -r 'join(",")')
+echo $DEFAULT_SUBNET_IDS
+```
+#### Create Services
+- Created Services for the `backend-flask`using:
+```
+aws ecs create-service --cli-input-json file://aws/json/service-backend-flask.json
+```
+#### Connection via Sessions Manaager (Fargate)
+- In order to connect to the Fargate container, a Sessions Manager has to be installed to enable login used the following:
+- Install for Ubuntu
+```
+curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+sudo dpkg -i session-manager-plugin.deb
+```
+- Verified its working using:
+```
+session-manager-plugin
+```
+- Then connected to the fargate container using:
+```
+aws ecs execute-command  \
+--region $AWS_DEFAULT_REGION \
+--cluster cruddur \
+--task 8ed89a0a637a487f8dc321908a912ece\
+--container backend-flask \
+--command "/bin/bash" \
+--interactive
+```
