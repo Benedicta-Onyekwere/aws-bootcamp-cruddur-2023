@@ -1,4 +1,4 @@
-FROM 914347776203.dkr.ecr.us-east-1.amazonaws.com/backend-flask
+FROM 914347776203.dkr.ecr.us-east-1.amazonaws.com/cruddur-python:3.10-slim-buster
 
 # Set a non-root user for security reasons
 RUN adduser --disabled-password --gecos '' myuser
@@ -22,6 +22,7 @@ WORKDIR /backend-flask
 COPY requirements.txt requirements.txt
 
 # Change ownership of files to myuser
+USER root
 RUN chown -R myuser:myuser .
 
 # Clean up unnecessary files and packages
@@ -42,7 +43,7 @@ COPY . .
 
 # Set Environment variables(Env Vars)
 # Inside conatainer and will remain set when the container is run 
-ENV FLASK_ENV=development
+ENV FLASK_DEBUG=1
 
 
 EXPOSE ${PORT}
