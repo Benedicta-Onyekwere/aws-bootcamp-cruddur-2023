@@ -33,7 +33,7 @@ source  "$THEIA_WORKSPACE_ROOT/backend-flask/bin/rds/update-sg-rule"
 ### Implement Health Check on Flask App
 #### Task Flask Script
 
-Didn't add but instead updated the following endpoint for my flask app because in week 1 App Containerization I already implemented health check as part of the homework challenge:
+Didn't implement but instead updated the following endpoint for my flask app because in week 1 App Containerization I already implemented health check as part of the homework challenge:
 ```sh
 @app.route("/api/activities/healthcheck", methods=['GET'])
 def data_healthcheck():
@@ -52,11 +52,10 @@ if response.getcode() == 200:
 else:
   print("Flask server is not running")
 ```
-- Made it executable, ran it and it worked:
+- Made it executable, ran it:
 ```sh
 chmod u+x ./bin/flask/health-check
 ```
-![image](https://user-images.githubusercontent.com/105982108/235412801-2b9a132d-f404-495d-8181-468598642989.png)
 
 #### Create CloudWatch Log Group
 - Created CoudWatch log group via AWS CLI using:
@@ -84,7 +83,7 @@ aws ecr create-repository \
   --image-tag-mutability MUTABLE
 ```  
 #### Login to ECR
-- Did this via CLR in order to be able to push the containers using:
+- Did this via CLI in order to be able to push the containers using:
 ```sh
 aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
 ```
@@ -520,7 +519,202 @@ aws ecs create-service --cli-input-json file://aws/json/service-backend-flask.js
 - Load balancer worked
 ![image](https://user-images.githubusercontent.com/105982108/236631364-2f33b313-3d2d-4dae-86e4-6f08247d0d79.png)
 
+![image](https://user-images.githubusercontent.com/105982108/236653196-d1ee6411-6705-4749-9aee-3f5e9eb726b1.png)
+
+
 ### For frontend-react.js
+#### Create json
+- Ceated a new file `frontend-react-json.js` in the `aws/task-definitions` folder for the task definitions.
+- frontend-react.js
+```sh
+{
+    "family": "frontend-react-js",
+    "executionRoleArn": "arn:aws:iam::914347776203:role/CruddurServiceExecutionRole",
+    "taskRoleArn": "arn:aws:iam::914347776203:role/CruddurTaskRole",
+    "networkMode": "awsvpc",
+    "cpu": "256",
+    "memory": "512",
+    "requiresCompatibilities": [ 
+      "FARGATE" 
+    ],
+    "containerDefinitions": [
+      {
+        "name": "frontend-react-js",
+        "image": "914347776203.dkr.ecr.us-east-1.amazonaws.com/frontend-react-js",
+        "essential": true,
+        "portMappings": [
+          {
+            "name": "frontend-react-js",
+            "containerPort": 3000,
+            "protocol": "tcp", 
+            "appProtocol": "http"
+          }
+        ],
+  
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+              "awslogs-group": "cruddur",
+              "awslogs-region": "us-east-1",
+              "awslogs-stream-prefix": "frontend-react-js"
+          }
+        }
+      }
+    ]
+  }
+
+```
+- Created `Dockerfile.prod` for production in the `frontend-react.js` folder.
+- Dockerfile.prod
+```sh
+# Base Image ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+FROM node:16.18 AS build
+
+ARG REACT_APP_BACKEND_URL
+ARG REACT_APP_AWS_PROJECT_REGION
+ARG REACT_APP_AWS_COGNITO_REGION
+ARG REACT_APP_AWS_USER_POOLS_ID
+ARG REACT_APP_CLIENT_ID
+
+ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+ENV REACT_APP_AWS_PROJECT_REGION=$REACT_APP_AWS_PROJECT_REGION
+ENV REACT_APP_AWS_COGNITO_REGION=$REACT_APP_AWS_COGNITO_REGION
+ENV REACT_APP_AWS_USER_POOLS_ID=$REACT_APP_AWS_USER_POOLS_ID
+ENV REACT_APP_CLIENT_ID=$REACT_APP_CLIENT_ID
+
+COPY . ./frontend-react-js
+WORKDIR /frontend-react-js
+RUN npm install
+RUN npm run build
+
+# New Base Image ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+FROM nginx:1.23.3-alpine
+
+# --from build is coming from the Base Image
+COPY --from=build /frontend-react-js/build /usr/share/nginx/html
+COPY --from=build /frontend-react-js/nginx.conf /etc/nginx/nginx.conf
+
+EXPOSE 3000
+```
+- Added to `.gitignore` file:
+```sh
+frontend-react-js/build/*
+```
+- Created a new file `nginx.conf` in the `frontend-react.js` folder and added following content.
+- nginx.conf
+```sh
+# Set the worker processes
+worker_processes 1;
+
+# Set the events module
+events {
+  worker_connections 1024;
+}
+
+# Set the http module
+http {
+  # Set the MIME types
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+
+  # Set the log format
+  log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+  # Set the access log
+  access_log  /var/log/nginx/access.log main;
+
+  # Set the error log
+  error_log /var/log/nginx/error.log;
+
+  # Set the server section
+  server {
+    # Set the listen port
+    listen 3000;
+
+    # Set the root directory for the app
+    root /usr/share/nginx/html;
+
+    # Set the default file to serve
+    index index.html;
+
+    location / {
+        # First attempt to serve request as file, then
+        # as directory, then fall back to redirecting to index.html
+        try_files $uri $uri/ $uri.html /index.html;
+    }
+
+    # Set the error page
+    error_page  404 /404.html;
+    location = /404.html {
+      internal;
+    }
+
+    # Set the error page for 500 errors
+    error_page  500 502 503 504  /50x.html;
+    location = /50x.html {
+      internal;
+    }
+  }
+}
+
+```
+- Also created a new file `service-frontend-react-js.json` in `aws/json` for the frontend react.
+- service-frontend-react-js.json
+```sh
+{
+  "cluster": "cruddur",
+  "launchType": "FARGATE",
+  "desiredCount": 1,
+  "enableECSManagedTags": true,
+  "enableExecuteCommand": true,
+  "loadBalancers": [
+    {
+        "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:914347776203:targetgroup/cruddur-frontend-react-js-tg/458523abe650a629",
+        "containerName": "frontend-react-js",
+        "containerPort": 3000
+    }
+  ],
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "assignPublicIp": "ENABLED",
+      "securityGroups": [
+        "sg-026fe9775bafd0dab"
+      ],
+      "subnets": [
+        "subnet-0f8b62ad6974a8242",
+        "subnet-0501847b87c744b3f",
+        "subnet-068fdb0d831af19b6",
+        "subnet-00f319ebba3f7822a",
+        "subnet-04c6bb6d2a56eef14",
+        "subnet-07fad2b0e92473b65"
+      ]
+    }
+  },
+  "propagateTags": "SERVICE",
+  "serviceName": "frontend-react-js",
+  "taskDefinition": "frontend-react-js",
+  "serviceConnectConfiguration": {
+    "enabled": true,
+    "namespace": "cruddur",
+    "services": [
+      {
+        "portName": "frontend-react-js",
+        "discoveryName": "frontend-react-js",
+        "clientAliases": [{"port": 3000}]
+      }
+    ]
+  }
+}
+```
+- Tested it by doing a dry run using:
+```sh
+npm run build
+```
+- Got errors and resolved it by updating `SignUpPage.js` file in the `src/pages` folder and everything then worked.
+
+
 - Created Repo
 ```sh
 aws ecr create-repository \
@@ -531,6 +725,10 @@ aws ecr create-repository \
 ```sh
 export ECR_FRONTEND_REACT_URL="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/frontend-react-js"
 echo $ECR_FRONTEND_REACT_URL
+```
+- Login to ECR
+```sh
+aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
 ```
 - Build Image
 ```sh
@@ -555,4 +753,12 @@ docker run --rm -p 3000:3000 -it frontend-react-js
 - Pushed Image
 ```sh
 docker push $ECR_FRONTEND_REACT_URL:latest
+```
+- Registered Task Definition
+```sh
+aws ecs register-task-definition --cli-input-json file://aws/task-definitions/frontend-react-js.json
+```
+- Created Services
+```sh
+aws ecs create-service --cli-input-json file://aws/json/service-frontend-react-js.json
 ```
