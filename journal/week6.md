@@ -464,7 +464,7 @@ response = urllib.request.urlopen('http://localhost:4567/api/activities/healthch
     sudo dpkg -i session-manager-plugin.deb
     cd backend-flask
 ```
-- Also created a new file `connect-to-service` in the `/bin/ecs` folder and added the shell in command to log into the container:
+- Also created a new file `connect-to-service` in the `backend-flask/bin/ecs` folder and added the shell in command to log into the container:
 ```sh
 #! /usr/bin/bash
 
@@ -762,3 +762,102 @@ aws ecs register-task-definition --cli-input-json file://aws/task-definitions/fr
 ```sh
 aws ecs create-service --cli-input-json file://aws/json/service-frontend-react-js.json
 ```
+- Everything worked but the instances were was unhealthy. fixed the issue in the following ways:
+- Detached the load balancer code from the `service-frontend-js.json` and re-launched after having deleted the previous service in the AWS console so that i can shell into the container to debug it.
+- Got error of bin/bash no such file when trying to shell in from the `backend-flask` using:
+```sh
+./bin/ecs/connect-to-service 53c795a6dcdf4ad084802cf6a5257a2f frontend-react.js
+```
+- Re-build the image locally in order to inspect output of CMD.
+- Ran the image again.
+```sh
+docker run --rm -p 3000:3000 -it frontend-react-js 
+```
+- Executed the inspect command after getting the container ID using:
+```sh
+docker inspect 7f5a17420ce2 
+```
+- Created a new file `connect-to-frontend-react-js` in the `backend/bin/ecs` in order for the frontend-flask to have the `bin/sh` command it needed.
+- connect-to-frontend-react-js
+```sh
+#! /usr/bin/bash
+
+if [ -z "$1" ]; then
+  echo "No TASK_ID argument supplied eg ./bin/ecs/connect-to-frontend-react-js 8037a126ad294d65896d0c3ba47a3de5 backend-flask "
+  exit 1
+fi
+TASK_ID=$1
+
+CONTAINER_NAME=frontend-react-js
+
+echo "Task ID:$TASK_ID"
+echo "Container name:$CONTAINER_NAME"
+
+aws ecs execute-command  \
+--region $AWS_DEFAULT_REGION \
+--cluster cruddur \
+--task $TASK_ID \
+--container $CONTAINER_NAME \
+--command "/bin/sh" \
+--interactive
+```
+- Re-named the `connect-to-service` to `connect-to-backend-flask` in the `backend-flask/bin/ecs` folder and updated the file.
+- connect-to-backend-flask
+```sh
+#! /usr/bin/bash
+
+if [ -z "$1" ]; then
+  echo "No TASK_ID argument supplied eg ./bin/ecs/connect-to-backend-flask 8037a126ad294d65896d0c3ba47a3de5 backend-flask "
+  exit 1
+fi
+TASK_ID=$1
+
+CONTAINER_NAME=backend-flask
+
+echo "Task ID:$TASK_ID"
+echo "Container name:$CONTAINER_NAME"
+
+aws ecs execute-command  \
+--region $AWS_DEFAULT_REGION \
+--cluster cruddur \
+--task $TASK_ID \
+--container $CONTAINER_NAME \
+--command "/bin/bash" \
+--interactive
+```
+- Made them executable using:
+```sh
+chmod u+x ./bin/ecs/connect-to-backend-flask
+chmod u+x ./bin/ecs/connect-to-frontend-react-js
+```
+- Logged into the container using:
+```sh
+./bin/ecs/connect-to-frontend-react-js d4fefab995a64c5791b0f81bb30565df
+```
+- Curled `localhost:3000`.
+- Since curl be used inside the Alpine container, created and added a healthcheck command for the frontend-react-js `task-definitions` file.
+```sh
+"containerDefinitions": [
+      {
+        "name": "frontend-react-js",
+        "image": "914347776203.dkr.ecr.us-east-1.amazonaws.com/frontend-react-js",
+        "essential": true,
+        "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:3000 || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3
+      },
+```
+- Edited Security Groups inbound rules to include port 3000 for the frontend-react-js.
+- Appended the load balancer code back to the  `service-frontend-js.json` file.
+- Deleted existing service in AWS console.
+- Recreated service via CLI.
+- The instances became healthy.
+
+
+
+
