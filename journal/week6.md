@@ -857,7 +857,65 @@ chmod u+x ./bin/ecs/connect-to-frontend-react-js
 - Deleted existing service in AWS console.
 - Recreated service via CLI.
 - The instances became healthy.
+- Load balancer worked.
 
+ ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/4ebf805e-1c52-482d-bd59-05cd1aff4824)
 
+- Created Route 53 on AWS console.
+- Created SSL Certificate using AWS Certificate Manager ACM.
+- Edited the listener and created manage rules in load balancer both backend-flask and frontend-react-js listeners in which port 80 was redirected to port 443 for https to make it secure and
+- Created another record on Route 53 to route traffic to the load balancer.
+- Confirmed it was routing traffic by first pinging and curling my DNS:
+```sh
+ping api.bennieo.me
 
+https://curl api.bennieo.me/api/activities/healthcheck
+```
+- They both worked, then confirmed it on my browser and it worked.
 
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/7748d80b-5d2d-4c9c-94ec-7d8023c5083d)
+
+- To get the endpoints working correctly because cross origin CORS is open to everything and frontend isn't working because it's pointing in the wrong direction.
+- Have to redeploy backend-flask with the right environment variables while for frontend had to rebuild the image. 
+- Updated the `backend-flask.json` file in the `aws/task-defintions` folder with:
+```sh
+{"name": "FRONTEND_URL", "value": "bennieo.me"},
+{"name": "BACKEND_URL", "value": "api.bennieo.me"},
+```
+- Registered task definitions.
+```sh
+aws ecs register-task-definition --cli-input-json file://aws/task-definitions/backend-flask.json
+```
+- Login into ECR
+```sh
+aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+```
+- Set URL
+```sh
+export ECR_FRONTEND_REACT_URL="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/frontend-react-js"
+echo $ECR_FRONTEND_REACT_URL
+```
+- Updated and executed Build Image
+```sh
+docker build \
+--build-arg REACT_APP_BACKEND_URL="https://api.bennieo.me" \
+--build-arg REACT_APP_AWS_PROJECT_REGION="$AWS_DEFAULT_REGION" \
+--build-arg REACT_APP_AWS_COGNITO_REGION="$AWS_DEFAULT_REGION" \
+--build-arg REACT_APP_AWS_USER_POOLS_ID="us-east-1_nCzleL11X" \
+--build-arg REACT_APP_CLIENT_ID="6rvluth75jaeg605hblpdhqmbq" \
+-t frontend-react-js \
+-f Dockerfile.prod \
+.
+```
+- Tagged Image
+```sh
+docker tag frontend-react-js:latest $ECR_FRONTEND_REACT_URL:latest
+```
+- Ran and tested image to confirm it's working without any issues with:
+```sh
+docker run --rm -p 3000:3000 -it frontend-react-js 
+```
+- Pushed Image
+```sh
+docker push $ECR_FRONTEND_REACT_URL:latest
+```
