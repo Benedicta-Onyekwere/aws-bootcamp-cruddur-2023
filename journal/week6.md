@@ -713,8 +713,6 @@ http {
 npm run build
 ```
 - Got errors and resolved it by updating `SignUpPage.js` file in the `src/pages` folder and everything then worked.
-
-
 - Created Repo
 ```sh
 aws ecr create-repository \
@@ -863,8 +861,9 @@ chmod u+x ./bin/ecs/connect-to-frontend-react-js
 
 - Created Route 53 on AWS console.
 - Created SSL Certificate using AWS Certificate Manager ACM.
-- Edited the listener and created manage rules in load balancer both backend-flask and frontend-react-js listeners in which port 80 was redirected to port 443 for https to make it secure and
-- Created another record on Route 53 to route traffic to the load balancer.
+- Edited the listener and managed rules in load balancer both backend-flask and frontend-react-js listeners in which port 80 was redirected to port 443 which is for https and port 443 was then redirected to `cruddur-frontend-react.js` app respectively.
+- After the rules were created then deleted both the frontend wih port 3000 and backend:4567 rules.
+- Created another record on Route 53 to  to the load balancer.
 - Confirmed it was routing traffic by first pinging and curling my DNS:
 ```sh
 ping api.bennieo.me
@@ -877,7 +876,7 @@ https://curl api.bennieo.me/api/activities/healthcheck
 
 - To get the endpoints working correctly because cross origin CORS is open to everything and frontend isn't working because it's pointing in the wrong direction.
 - Have to redeploy backend-flask with the right environment variables while for frontend had to rebuild the image. 
-- Updated the `backend-flask.json` file in the `aws/task-defintions` folder with:
+- Updated the env vars in the `backend-flask.json` file in the `aws/task-defintions` folder with:
 ```sh
 {"name": "FRONTEND_URL", "value": "bennieo.me"},
 {"name": "BACKEND_URL", "value": "api.bennieo.me"},
@@ -919,3 +918,17 @@ docker run --rm -p 3000:3000 -it frontend-react-js
 ```sh
 docker push $ECR_FRONTEND_REACT_URL:latest
 ```
+- In the ECS, I updated both the `frontend-react-js`and the `backend-flask` services and force new deployment since I updated the `task-definitions` so it can use the latest update.
+- Checked the health status of the containers by checking the target groups and both were healthy.
+- Put on the browser and api.bennieo.me worked while bennieo.me worked but had a cors issue because it wasnt out putting any message.
+- Resolved it by adding the protocols in the environment variables in the `task-definitions` file for both the frontend and backend Url.
+```
+{"name": "FRONTEND_URL", "value": "htpps://bennieo.me"},
+{"name": "BACKEND_URL", "value": "htpps://api.bennieo.me"},
+```
+- Registered task definitions.
+```sh
+aws ecs register-task-definition --cli-input-json file://aws/task-definitions/backend-flask.json
+```
+- Then it worked.
+
