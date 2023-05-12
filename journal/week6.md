@@ -872,6 +872,9 @@ https://curl api.bennieo.me/api/activities/healthcheck
 ```
 - They both worked, then confirmed it on my browser and it worked.
 
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/b0c02c11-2df6-4562-bd46-f7e1498e82cb)
+
+
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/7748d80b-5d2d-4c9c-94ec-7d8023c5083d)
 
 - To get the endpoints working correctly because cross origin CORS is open to everything and frontend isn't working because it's pointing in the wrong direction.
@@ -923,12 +926,14 @@ docker push $ECR_FRONTEND_REACT_URL:latest
 - Put on the browser and api.bennieo.me worked while bennieo.me worked but had a cors issue because it wasnt out putting any message.
 - Resolved it by adding the protocols in the environment variables in the `task-definitions` file for both the frontend and backend Url.
 ```
-{"name": "FRONTEND_URL", "value": "htpps://bennieo.me"},
-{"name": "BACKEND_URL", "value": "htpps://api.bennieo.me"},
+{"name": "FRONTEND_URL", "value": "https://bennieo.me"},
+{"name": "BACKEND_URL", "value": "https://api.bennieo.me"},
 ```
 - Registered task definitions.
 ```sh
 aws ecs register-task-definition --cli-input-json file://aws/task-definitions/backend-flask.json
 ```
 - Then it worked.
+- 
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/1546c818-9077-463f-83eb-a4b9953dd4ab)
 
