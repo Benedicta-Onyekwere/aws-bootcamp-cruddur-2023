@@ -112,8 +112,9 @@ ENV FLASK_DEBUG=1
 ```
 - This process is repeated for all the containers.
 
-### For backend-flask
-- Created Repo
+### Deploy Backend Flask app as a Service to Fargate
+#### Created ECR Repo and push image for `backend-flask`.
+- ECR Repo 
 ```sh
 aws ecr create-repository \
   --repository-name backend-flask \
@@ -501,7 +502,7 @@ aws ecs execute-command  \
 - Checked endpoint for HomeActivities didn't work because the Services Security Group had no access to the RDS instance. 
 - Connected it by editing the inbound rules for the RDS instance to allow/include the Security Group for the backend-flask Services and it worked.
 
-- Created Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js.
+- Provisioned and configurrd Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js.
 - Updated json file in `aws/json/service-backend-flask.json` with:
 ```sh
  "loadBalancers": [
@@ -522,7 +523,7 @@ aws ecs create-service --cli-input-json file://aws/json/service-backend-flask.js
 ![image](https://user-images.githubusercontent.com/105982108/236653196-d1ee6411-6705-4749-9aee-3f5e9eb726b1.png)
 
 
-### For frontend-react.js
+### Deploy Frontend React.js app as a Service to Fargate
 #### Create json
 - Ceated a new file `frontend-react-json.js` in the `aws/task-definitions` folder for the task definitions.
 - frontend-react.js
@@ -713,7 +714,8 @@ http {
 npm run build
 ```
 - Got errors and resolved it by updating `SignUpPage.js` file in the `src/pages` folder and everything then worked.
-- Created Repo
+#### Created ECR Repo and push Image for frontend-React-js
+- ECR Repo
 ```sh
 aws ecr create-repository \
   --repository-name frontend-react-js \
@@ -861,9 +863,11 @@ chmod u+x ./bin/ecs/connect-to-frontend-react-js
 
 - Created Route 53 on AWS console.
 - Created SSL Certificate using AWS Certificate Manager ACM.
-- Edited the listener and managed rules in load balancer both backend-flask and frontend-react-js listeners in which port 80 was redirected to port 443 which is for https and port 443 was then redirected to `cruddur-frontend-react.js` app respectively.
+- Setup a record set for naked domain to point to frontend-react-js.
+- Setup a record set for api subdomain to point to the backend-flask.
+- I did the above by editing the listener and managed rules in load balancer both backend-flask and frontend-react-js listeners in which port 80 was redirected to port 443 which is for https and port 443 was then redirected to `cruddur-frontend-react.js` app respectively.
 - After the rules were created then deleted both the frontend wih port 3000 and backend:4567 rules.
-- Created another record on Route 53 to  to the load balancer.
+- Created another record on Route 53 to piont to the load balancer.
 - Confirmed it was routing traffic by first pinging and curling my DNS:
 ```sh
 ping api.bennieo.me
@@ -877,6 +881,7 @@ https://curl api.bennieo.me/api/activities/healthcheck
 
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/7748d80b-5d2d-4c9c-94ec-7d8023c5083d)
 
+#### Configure CORS to only permit traffic from my domain
 - To get the endpoints working correctly because cross origin CORS is open to everything and frontend isn't working because it's pointing in the wrong direction.
 - Have to redeploy backend-flask with the right environment variables while for frontend had to rebuild the image. 
 - Updated the env vars in the `backend-flask.json` file in the `aws/task-defintions` folder with:
@@ -937,3 +942,99 @@ aws ecs register-task-definition --cli-input-json file://aws/task-definitions/ba
 - 
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/1546c818-9077-463f-83eb-a4b9953dd4ab)
 
+#### Secure Flask by not running in debug mode
+- Updated my load balancer security group inbound rules to only allow access my IP address.
+- Updated backend-flask Dockerfile by deleting the `ENV FLASK_DEBUG=1` and updated it with:
+```sh
+CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0", "--port=4567", "--debug"]
+```
+- Created a new `Dockerfile.prod` in the `backend-flask` folder.
+- Created a new script file `login` in the `backend-flask/bin/ecr` folder and logged into the ecr.
+```sh
+#! /usr/bin/bash
+
+aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+```
+- Made it executable using:
+```sh
+chmod u+x ./bin/ecr/login
+```
+- Built the new `Dockerfile.prod` image using:
+```sh
+docker build -f Dockerfile.prod -t backend-flask-prod .
+- Inputted environment variables using:
+```sh
+! /usr/bin/bash
+
+docker run --rm \
+-p 4567:4567 \
+--env AWS_ENDPOINT_URL="http://dynamodb-local:8000" \
+--env CONNECTION_URL="postgresql://postgres:password@db:5432/cruddur" \
+--env FRONTEND_URL="https://3000-${GITPOD_WORKSPACE_ID}.${GITPOD_WORKSPACE_CLUSTER_HOST}" \
+--env BACKEND_URL="https://4567-${GITPOD_WORKSPACE_ID}.${GITPOD_WORKSPACE_CLUSTER_HOST}" \
+--env OTEL_SERVICE_NAME='backend-flask' \
+--env OTEL_EXPORTER_OTLP_ENDPOINT="https://api.honeycomb.io" \
+--env OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=${HONEYCOMB_API_KEY}" \
+--env AWS_XRAY_URL="*4567-${GITPOD_WORKSPACE_ID}.${GITPOD_WORKSPACE_CLUSTER_HOST}*" \
+--env AWS_XRAY_DAEMON_ADDRESS="xray-daemon:2000" \
+--env AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION}" \
+--env AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \
+--env AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
+--env ROLLBAR_ACCESS_TOKEN="${ROLLBAR_ACCESS_TOKEN}" \
+--env AWS_COGNITO_USER_POOL_ID="${AWS_COGNITO_USER_POOL_ID}" \
+--env AWS_COGNITO_USER_POOL_CLIENT_ID="6rvluth75jaeg605hblpdhqmbq" \
+-it backend-flask-prod
+```
+- Purposely created an error in `app.py` in order to see what or how the error message will be
+```sh
+@app.route("/api/activities/healthcheck", methods=['GET'])
+def data_healthcheck():
+  data = HealthcheckActivities.run()
+  hello = None
+  hello()
+  return {'success': True}, 200
+```
+- Finally gave an output without the debug message.
+- Created new script files for building docker images for both frontend-react-js and backend-flask,`backend-flask-prod`and `frontend-react-js-prod` in the `backend-flask/bin/docker/build` folders.
+- Also created a script file `backend-flask-prod` for the docker run command in the `backend-flask/bin/docker/run` folder.
+- Removed the error from `app.py` file after affirming everything is working the way it should.
+- Created more new scripts file ` backend-for-prod`for pushing the image in the `backend-flask/bin/docker/push` folder.
+```sh
+#! /usr/bin/bash
+
+ECR_BACKEND_FLASK_URL="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/backend-flask"
+echo $ECR_BACKEND_FLASK_URL
+
+docker tag backend-flask-prod:latest $ECR_BACKEND_FLASK_URL:latest
+docker push $ECR_BACKEND_FLASK_URL:latest
+```
+- Made it executable
+```sh
+chmod u+x ./bin/docker/push/backend-flask-prod
+```
+- Created a new file script `force-deploy-backend-flask` to automate updating services in AWS ECS console in the `backend-flask/bin/esc` folder.
+```sh
+#! /usr/bin/bash
+
+CLUSTER_NAME="cruddur"
+SERVICE_NAME="backend-flask"
+TASK_DEFINTION_FAMILY="backend-flask"
+
+
+LATEST_TASK_DEFINITION_ARN=$(aws ecs describe-task-definition \
+--task-definition $TASK_DEFINTION_FAMILY \
+--query 'taskDefinition.taskDefinitionArn' \
+--output text)
+
+aws ecs update-service \
+--cluster $CLUSTER_NAME \
+--service $SERVICE_NAME \
+--task-definition $LATEST_TASK_DEFINITION_ARN \
+--force-new-deployment
+
+#aws ecs describe-services \
+#--cluster $CLUSTER_NAME \
+#--service $SERVICE_NAME \
+#--query 'services[0].deployments' \
+#--output table
+```
