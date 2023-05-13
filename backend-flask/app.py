@@ -235,8 +235,6 @@ def data_notifications():
 @app.route("/api/activities/healthcheck", methods=['GET'])
 def data_healthcheck():
   data = HealthcheckActivities.run()
-  hello = None
-  hello()
   return {'success': True}, 200
 
 @app.route("/api/activities/@<string:handle>", methods=['GET'])
