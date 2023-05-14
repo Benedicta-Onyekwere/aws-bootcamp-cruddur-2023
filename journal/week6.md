@@ -962,6 +962,7 @@ chmod u+x ./bin/ecr/login
 - Built the new `Dockerfile.prod` image using:
 ```sh
 docker build -f Dockerfile.prod -t backend-flask-prod .
+```
 - Inputted environment variables using:
 ```sh
 ! /usr/bin/bash
@@ -1012,7 +1013,7 @@ docker push $ECR_BACKEND_FLASK_URL:latest
 ```sh
 chmod u+x ./bin/docker/push/backend-flask-prod
 ```
-- Created a new file script `force-deploy-backend-flask` to automate updating services in AWS ECS console in the `backend-flask/bin/esc` folder.
+- Created a new file script `force-deploy-backend-flask` to automate updating services in AWS ECS console in the `backend-flask/bin/ecs` folder.
 ```sh
 #! /usr/bin/bash
 
@@ -1038,3 +1039,187 @@ aws ecs update-service \
 #--query 'services[0].deployments' \
 #--output table
 ```
+#### Refactor bin directory to be top level
+- Moved the entire `bin` directory out of the `backend-flask` directory to the top.
+#### Building frontend-react-js-prod
+- Updated the `frontend-react-js-prod` in the `bin/docker/build`folder so that it can point to the right direction with:
+```sh
+#! /usr/bin/bash
+
+ABS_PATH=$(readlink -f "$0")
+BUILD_PATH=$(dirname $ABS_PATH)
+DOCKER_PATH=$(dirname $BUILD_PATH)
+BIN_PATH=$(dirname $DOCKER_PATH)
+PROJECT_PATH=$(dirname $BIN_PATH)
+FRONTEND_REACT_JS_PATH="$PROJECT_PATH/frontend-react-js"
+
+-f "$FRONTEND_REACT_JS_PATH/Dockerfile.prod" \
+"$FRONTEND_REACT_JS_PATH/." 
+```
+- Made it executable
+```sh
+chmod u+x bin/docker/build/frontend-react-js-prod
+```
+- Also did same for `backend-flask-prod` file.
+```sh
+#! /usr/bin/bash
+
+ABS_PATH=$(readlink -f "$0")
+BUILD_PATH=$(dirname $ABS_PATH)
+DOCKER_PATH=$(dirname $BUILD_PATH)
+BIN_PATH=$(dirname $DOCKER_PATH)
+PROJECT_PATH=$(dirname $BIN_PATH)
+BACKEND_FLASK_PATH="$PROJECT_PATH/backend-flask"
+
+docker build \
+-f "$BACKEND_FLASK_PATH/Dockerfile.prod" \
+-t backend-flask-prod \
+"$BACKEND_FLASK_PATH/."
+```
+- Updated `schema-load` and `seed` files in the `bin/db` folders where the changes in the paths made above is also necessary.
+- For Schema-load
+```sh 
+ABS_PATH=$(readlink -f "$0")
+BIN_PATH=$(dirname $ABS_PATH)
+PROJECT_PATH=$(dirname $BIN_PATH)
+BACKEND_FLASK_PATH="$PROJECT_PATH/backend-flask"
+schema_path="$BACKEND_FLASK_PATH/db/schema.sql"
+echo $schema_path
+```
+- For Seed
+```sh
+#! /usr/bin/bash
+
+CYAN='\033[1;36m'
+NO_COLOR='\033[0m'
+LABEL="db-seed"
+printf "${CYAN}== ${LABEL}${NO_COLOR}\n"
+
+ABS_PATH=$(readlink -f "$0")
+BIN_PATH=$(dirname $ABS_PATH)
+PROJECT_PATH=$(dirname $BIN_PATH)
+BACKEND_FLASK_PATH="$PROJECT_PATH/backend-flask"
+schema_path="$BACKEND_FLASK_PATH/db/schema.sql"
+echo $schema_path
+
+if [ "$1" = "prod" ]; then
+  echo "Running in production mode"
+  URL=$PROD_CONNECTION_URL
+else
+  URL=$CONNECTION_URL
+fi
+
+psql $URL cruddur < $seed_path 
+```
+- For Setup
+```sh
+ABS_PATH=$(readlink -f "$0")
+bin_path=$(dirname $ABS_PATH)
+```
+- Updated `gitpod.yml` file.
+```sh
+ source  "$THEIA_WORKSPACE_ROOT/bin/rds/update-sg-rule"
+```
+- Created a new file to push image for `frontend-react-js-prod` in the `bin/docker/push` folder.
+```sh
+#! /usr/bin/bash
+
+
+ECR_FRONTEND_REACT_URL="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/frontend-react-js"
+echo $ECR_FRONTEND_REACT_URL
+
+docker tag frontend-react-js:latest $ECR_FRONTEND_REACT_URL:latest
+docker push $ECR_FRONTEND_REACT_URL:latest
+```
+- Made it executable.
+```sh
+chmod u+x bin/docker/push/frontend-react-js-prod
+```
+- Also created a new file script `force-deploy-frontend-react-js` to automate updating services in AWS ECS console in the `/bin/ecs` folder. 
+```sh
+#! /usr/bin/bash
+
+CLUSTER_NAME="cruddur"
+SERVICE_NAME="frontend-react-js"
+TASK_DEFINTION_FAMILY="frontend-react-js"
+
+LATEST_TASK_DEFINITION_ARN=$(aws ecs describe-task-definition \
+--task-definition $TASK_DEFINTION_FAMILY \
+--query 'taskDefinition.taskDefinitionArn' \
+--output text)
+
+aws ecs update-service \
+--cluster $CLUSTER_NAME \
+--service $SERVICE_NAME \
+--task-definition $LATEST_TASK_DEFINITION_ARN \
+--force-new-deployment
+```
+- Made it executable.
+```sh
+chmod u+x bin/ecs/force-deploy-frontend-react-js
+```
+- Implement Refresh Cognito Token
+- Fixed expiring token by updating the following files in the `frontend-react-js` :
+- For CheckAuth in the `frontend-react-js/src/lib` folder
+```sh
+import { Auth } from 'aws-amplify';
+import { resolvePath } from 'react-router-dom';
+
+export async function getAccessToken(){
+  Auth.currentSession()
+  .then((cognito_user_session) => {
+    const access_token = cognito_user_session.accessToken.jwtToken
+    localStorage.setItem("access_token", access_token)
+  })
+  .catch((err) => console.log(err));
+}
+
+export async function checkAuth(setUser){
+  Auth.currentAuthenticatedUser({
+    // Optional, By default is false. 
+    // If set to true, this call will send a 
+    // request to Cognito to get the latest user data
+    bypassCache: false 
+  })
+  .then((cognito_user) => {
+    console.log('cognito_user',cognito_user);
+    setUser({
+      display_name: cognito_user.attributes.name,
+      handle: cognito_user.attributes.preferred_username
+    })
+    return Auth.currentSession()
+  }).then((cognito_user_session) => {
+      console.log('cognito_user_session',cognito_user_session);
+      localStorage.setItem("access_token", cognito_user_session.accessToken.jwtToken)
+  })
+  .catch((err) => console.log(err));
+};
+```
+- For MessageForm.js in `frontend-react-js/src/components` folder
+```sh
+import {getAccessToken} from '../lib/CheckAuth';
+
+      await getAccessToken()
+      const access_token = localStorage.getItem("access_token")
+      
+          'Authorization': `Bearer ${access_token}`,
+```
+- The same line of code were updated in the `frontend-react-js/src/pages` folder for the following files:
+- MessageGroupNewPage.js, MessageGroupPage.js, MessageGroupPage.js and MessageGroupsPage.js 
+```sh
+import {getAccessToken} from '../lib/CheckAuth';
+
+      await getAccessToken()
+      const access_token = localStorage.getItem("access_token")
+      
+          'Authorization': `Bearer ${access_token}`,
+```
+
+### Fix Messaging in Production
+
+#### Restructuring Bash Scripts Again
+- Restructured files in the `bin` directory by deleting and creating some as follows:
+- Created two new folders `backend` and `frontend`folders.
+- Moved all the frontend-react-js scripts from `bin/docker/build/frontend-react-js-prod`, `bin/docker/push/frontend-react-js-prod`, `bin/ecs/connect-to-frontend-react-js`, `bin/ecs/force-deploy-frontend-react-js` to the `frontend` and they were renamed accordinly as Buid, Connect, Deploy and Push.
+- Exact same thing was done for all backend-flasks scripts in the same folders as above to `Backend` and were renamed as well to Buid, Connect, Deploy and Push. 
+- 
