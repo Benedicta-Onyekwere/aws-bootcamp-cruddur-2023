@@ -15,6 +15,13 @@ ddb = boto3.client('dynamodb',**attrs)
 
 table_name = 'cruddur-messages'
 
+# Check if the table already exists
+existing_tables = ddb.list_tables()['TableNames']
+if table_name in existing_tables:
+    # Delete the table if it exists
+    ddb.delete_table(TableName=table_name)
+    print(f"Deleted existing table: {table_name}")
+
 
 response = ddb.create_table(
   TableName=table_name,
