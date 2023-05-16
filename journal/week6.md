@@ -1360,9 +1360,9 @@ bin/backend/push
 
 bin/backend/deploy
 ```
-- Seed data worked returned input
+- Seed data worked.
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/845e1a48-be2e-4167-b056-6b5ea763bf60)
 
-- New meassage worked
+- New message worked
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/ff7fc06c-2473-4450-b0bd-14ac42ff5eeb)
 
