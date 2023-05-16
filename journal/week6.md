@@ -2,7 +2,7 @@
 
 ### Test RDS Connection
 
-- Added this `test` script file into `backend-flask/bin/db` folder to easily check the connection from our container.
+- Added this `test` script file into `backend-flask/bin/db` folder to easily check the connection from the container.
 ```sh
 #!/usr/bin/env python3
 
@@ -338,7 +338,7 @@ export CRUD_SERVICE_SG=$(aws ec2 create-security-group \
   --query "GroupId" --output text)
 echo $CRUD_SERVICE_SG
 ```
-- Finished creating tthe service on the console and started debugging the issues.
+- Finished creating the service on the console and started debugging the issues.
 - Attached CloudWatchFullAccessPolicy and modified the CruddurServiceExecutionPolicy to include AllowECRAccess.
 ```sh
 {
@@ -432,7 +432,7 @@ echo $DEFAULT_SUBNET_IDS
 ```sh
 aws ecs create-service --cli-input-json file://aws/json/service-backend-flask.json
 ```
-#### Connection via Sessions Manaager (Fargate)
+#### Connection via Sessions Manager (Fargate)
 - In order to connect to the Fargate container, a Sessions Manager has to be installed to enable login used the following:
 - To Install for Ubuntu
 ```sh
@@ -502,7 +502,7 @@ aws ecs execute-command  \
 #### Provision and configure Application Load Balancer along with target groups
 - Checked endpoint for HomeActivities didn't work because the Services Security Group had no access to the RDS instance. 
 - Connected it by editing the inbound rules for the RDS instance to allow/include the Security Group for the backend-flask Services and it worked.
-- Provisioned and configured Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js.
+- Provisioned and configured Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js`.
 - Updated json file in `aws/json/service-backend-flask.json` with:
 ```sh
  "loadBalancers": [
@@ -1292,7 +1292,7 @@ echo $kill_path
 
 psql $CONNECTION_URL cruddur < $kill_path
 ```
-- Made the file executable sing;
+- Made the file executable using;
 ```sh
 chmod u+x bin/db/kill-all
 ```
@@ -1323,7 +1323,7 @@ parent_path = os.path.abspath(os.path.join(current_path, '..', '..','backend-fla
 - Then the `bin/db/setup` finally worked.
 - Ran the script `bin/ddb/schema-load` but it didnt work.
 - Updated my `bin/ddb/schema-load` file to delete the existing table because I kept getting the error 'ResourceInUseException'
-```
+```sh
 # Check if the table already exists
 existing_tables = ddb.list_tables()['TableNames']
 if table_name in existing_tables:
