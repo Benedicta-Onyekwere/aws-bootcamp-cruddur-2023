@@ -1,6 +1,6 @@
 # Week 6 — Deploying Containers
 
-### Test RDS Connecetion
+### Test RDS Connection
 
 - Added this `test` script file into `backend-flask/bin/db` folder to easily check the connection from our container.
 ```sh
@@ -58,7 +58,7 @@ chmod u+x ./bin/flask/health-check
 ```
 
 #### Create CloudWatch Log Group
-- Created CoudWatch log group via AWS CLI using:
+- Created CloudWatch log group via AWS CLI using:
 ```sh
 aws logs create-log-group --log-group-name "cruddur"
 aws logs put-retention-policy --log-group-name "cruddur" --retention-in-days 1
@@ -152,7 +152,7 @@ aws ssm put-parameter --type "SecureString" --name "/cruddur/backend-flask/ROLLB
 aws ssm put-parameter --type "SecureString" --name "/cruddur/backend-flask/OTEL_EXPORTER_OTLP_HEADERS" --value "x-honeycomb-team=$HONEYCOMB_API_KEY"
 ```
 
-### Create Task and Exection Roles for Task Defintion
+### Create Task and Execution Roles for Task Defintion
  
 #### Create ExecutionRole
 ```sh
@@ -457,7 +457,7 @@ aws ecs execute-command  \
 ```sh
 response = urllib.request.urlopen('http://localhost:4567/api/activities/healthcheck')
 ```
-- Updated `gitpod.yaml` file to include the Seessions Manager code to log into the container:
+- Updated `gitpod.yaml` file to include the Sesssions Manager code to log into the container:
 ```sh
 - name: fargate
   before |
@@ -499,10 +499,10 @@ aws ecs execute-command  \
 
 ![image](https://user-images.githubusercontent.com/105982108/236410929-3c8a84eb-4fdf-4b9d-ab79-66ba0d0157bf.png)
 
+#### Provision and configure Application Load Balancer along with target groups
 - Checked endpoint for HomeActivities didn't work because the Services Security Group had no access to the RDS instance. 
 - Connected it by editing the inbound rules for the RDS instance to allow/include the Security Group for the backend-flask Services and it worked.
-
-- Provisioned and configurrd Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js.
+- Provisioned and configured Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js.
 - Updated json file in `aws/json/service-backend-flask.json` with:
 ```sh
  "loadBalancers": [
@@ -762,7 +762,7 @@ aws ecs register-task-definition --cli-input-json file://aws/task-definitions/fr
 ```sh
 aws ecs create-service --cli-input-json file://aws/json/service-frontend-react-js.json
 ```
-- Everything worked but the instances were was unhealthy. fixed the issue in the following ways:
+- Everything worked but the instances were unhealthy, fixed the issue in the following ways:
 - Detached the load balancer code from the `service-frontend-js.json` and re-launched after having deleted the previous service in the AWS console so that i can shell into the container to debug it.
 - Got error of bin/bash no such file when trying to shell in from the `backend-flask` using:
 ```sh
@@ -801,7 +801,7 @@ aws ecs execute-command  \
 --command "/bin/sh" \
 --interactive
 ```
-- Re-named the `connect-to-service` to `connect-to-backend-flask` in the `backend-flask/bin/ecs` folder and updated the file.
+- Renamed the `connect-to-service` to `connect-to-backend-flask` in the `backend-flask/bin/ecs` folder and updated the file.
 - connect-to-backend-flask
 ```sh
 #! /usr/bin/bash
@@ -835,7 +835,7 @@ chmod u+x ./bin/ecs/connect-to-frontend-react-js
 ./bin/ecs/connect-to-frontend-react-js d4fefab995a64c5791b0f81bb30565df
 ```
 - Curled `localhost:3000`.
-- Since curl be used inside the Alpine container, created and added a healthcheck command for the frontend-react-js `task-definitions` file.
+- Since curl can be used inside the Alpine container, created and added a healthcheck command for the frontend-react-js `task-definitions` file.
 ```sh
 "containerDefinitions": [
       {
@@ -860,7 +860,7 @@ chmod u+x ./bin/ecs/connect-to-frontend-react-js
 - Load balancer worked.
 
  ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/4ebf805e-1c52-482d-bd59-05cd1aff4824)
-
+ 
 - Created Route 53 on AWS console.
 - Created SSL Certificate using AWS Certificate Manager ACM.
 - Setup a record set for naked domain to point to frontend-react-js.
@@ -1158,8 +1158,8 @@ aws ecs update-service \
 ```sh
 chmod u+x bin/ecs/force-deploy-frontend-react-js
 ```
-- Implement Refresh Cognito Token
-- Fixed expiring token by updating the following files in the `frontend-react-js` :
+### Implement Refresh Cognito Token
+#### Fixed expiring token by updating the following files in the `frontend-react-js` :
 - For CheckAuth in the `frontend-react-js/src/lib` folder
 ```sh
 import { Auth } from 'aws-amplify';
