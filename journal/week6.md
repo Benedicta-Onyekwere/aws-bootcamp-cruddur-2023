@@ -1,8 +1,8 @@
 # Week 6 — Deploying Containers
 
-### Test RDS Connecetion
+### Test RDS Connection
 
-- Added this `test` script file into `backend-flask/bin/db` folder to easily check the connection from our container.
+- Added this `test` script file into `backend-flask/bin/db` folder to easily check the connection from the container.
 ```sh
 #!/usr/bin/env python3
 
@@ -58,7 +58,7 @@ chmod u+x ./bin/flask/health-check
 ```
 
 #### Create CloudWatch Log Group
-- Created CoudWatch log group via AWS CLI using:
+- Created CloudWatch log group via AWS CLI using:
 ```sh
 aws logs create-log-group --log-group-name "cruddur"
 aws logs put-retention-policy --log-group-name "cruddur" --retention-in-days 1
@@ -152,7 +152,7 @@ aws ssm put-parameter --type "SecureString" --name "/cruddur/backend-flask/ROLLB
 aws ssm put-parameter --type "SecureString" --name "/cruddur/backend-flask/OTEL_EXPORTER_OTLP_HEADERS" --value "x-honeycomb-team=$HONEYCOMB_API_KEY"
 ```
 
-### Create Task and Exection Roles for Task Defintion
+### Create Task and Execution Roles for Task Defintion
  
 #### Create ExecutionRole
 ```sh
@@ -338,7 +338,7 @@ export CRUD_SERVICE_SG=$(aws ec2 create-security-group \
   --query "GroupId" --output text)
 echo $CRUD_SERVICE_SG
 ```
-- Finished creating tthe service on the console and started debugging the issues.
+- Finished creating the service on the console and started debugging the issues.
 - Attached CloudWatchFullAccessPolicy and modified the CruddurServiceExecutionPolicy to include AllowECRAccess.
 ```sh
 {
@@ -432,7 +432,7 @@ echo $DEFAULT_SUBNET_IDS
 ```sh
 aws ecs create-service --cli-input-json file://aws/json/service-backend-flask.json
 ```
-#### Connection via Sessions Manaager (Fargate)
+#### Connection via Sessions Manager (Fargate)
 - In order to connect to the Fargate container, a Sessions Manager has to be installed to enable login used the following:
 - To Install for Ubuntu
 ```sh
@@ -457,7 +457,7 @@ aws ecs execute-command  \
 ```sh
 response = urllib.request.urlopen('http://localhost:4567/api/activities/healthcheck')
 ```
-- Updated `gitpod.yaml` file to include the Seessions Manager code to log into the container:
+- Updated `gitpod.yaml` file to include the Sesssions Manager code to log into the container:
 ```sh
 - name: fargate
   before |
@@ -499,10 +499,10 @@ aws ecs execute-command  \
 
 ![image](https://user-images.githubusercontent.com/105982108/236410929-3c8a84eb-4fdf-4b9d-ab79-66ba0d0157bf.png)
 
+#### Provision and configure Application Load Balancer along with target groups
 - Checked endpoint for HomeActivities didn't work because the Services Security Group had no access to the RDS instance. 
 - Connected it by editing the inbound rules for the RDS instance to allow/include the Security Group for the backend-flask Services and it worked.
-
-- Provisioned and configurrd Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js.
+- Provisioned and configured Application Load Balancer via AWS console with target and security groups respectively for both `backend-flask` and `frontend-react.js`.
 - Updated json file in `aws/json/service-backend-flask.json` with:
 ```sh
  "loadBalancers": [
@@ -762,7 +762,7 @@ aws ecs register-task-definition --cli-input-json file://aws/task-definitions/fr
 ```sh
 aws ecs create-service --cli-input-json file://aws/json/service-frontend-react-js.json
 ```
-- Everything worked but the instances were was unhealthy. fixed the issue in the following ways:
+- Everything worked but the instances were unhealthy, fixed the issue in the following ways:
 - Detached the load balancer code from the `service-frontend-js.json` and re-launched after having deleted the previous service in the AWS console so that i can shell into the container to debug it.
 - Got error of bin/bash no such file when trying to shell in from the `backend-flask` using:
 ```sh
@@ -801,7 +801,7 @@ aws ecs execute-command  \
 --command "/bin/sh" \
 --interactive
 ```
-- Re-named the `connect-to-service` to `connect-to-backend-flask` in the `backend-flask/bin/ecs` folder and updated the file.
+- Renamed the `connect-to-service` to `connect-to-backend-flask` in the `backend-flask/bin/ecs` folder and updated the file.
 - connect-to-backend-flask
 ```sh
 #! /usr/bin/bash
@@ -835,7 +835,7 @@ chmod u+x ./bin/ecs/connect-to-frontend-react-js
 ./bin/ecs/connect-to-frontend-react-js d4fefab995a64c5791b0f81bb30565df
 ```
 - Curled `localhost:3000`.
-- Since curl be used inside the Alpine container, created and added a healthcheck command for the frontend-react-js `task-definitions` file.
+- Since curl can be used inside the Alpine container, created and added a healthcheck command for the frontend-react-js `task-definitions` file.
 ```sh
 "containerDefinitions": [
       {
@@ -860,7 +860,7 @@ chmod u+x ./bin/ecs/connect-to-frontend-react-js
 - Load balancer worked.
 
  ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/4ebf805e-1c52-482d-bd59-05cd1aff4824)
-
+ 
 - Created Route 53 on AWS console.
 - Created SSL Certificate using AWS Certificate Manager ACM.
 - Setup a record set for naked domain to point to frontend-react-js.
@@ -1158,8 +1158,8 @@ aws ecs update-service \
 ```sh
 chmod u+x bin/ecs/force-deploy-frontend-react-js
 ```
-- Implement Refresh Cognito Token
-- Fixed expiring token by updating the following files in the `frontend-react-js` :
+### Implement Refresh Cognito Token
+#### Fixed expiring token by updating the following files in the `frontend-react-js` :
 - For CheckAuth in the `frontend-react-js/src/lib` folder
 ```sh
 import { Auth } from 'aws-amplify';
@@ -1222,4 +1222,147 @@ import {getAccessToken} from '../lib/CheckAuth';
 - Created two new folders `backend` and `frontend`folders.
 - Moved all the frontend-react-js scripts from `bin/docker/build/frontend-react-js-prod`, `bin/docker/push/frontend-react-js-prod`, `bin/ecs/connect-to-frontend-react-js`, `bin/ecs/force-deploy-frontend-react-js` to the `frontend` and they were renamed accordinly as Buid, Connect, Deploy and Push.
 - Exact same thing was done for all backend-flasks scripts in the same folders as above to `Backend` and were renamed as well to Buid, Connect, Deploy and Push. 
-- 
+- Updated the backend and frontend build paths since the `bin` directory is no longer in the the `backend-flask` so they can point in the right direction.
+```sh
+ABS_PATH=$(readlink -f "$0")
+BIN_PATH=$(dirname $ABS_PATH)
+PROJECT_PATH=$(dirname $BIN_PATH)
+BACKEND_FLASK_PATH="$PROJECT_PATH/backend-flask"
+
+ABS_PATH=$(readlink -f "$0")
+BIN_PATH=$(dirname $ABS_PATH)
+PROJECT_PATH=$(dirname $BIN_PATH)
+FRONTEND_REACT_JS_PATH="$PROJECT_PATH/frontend-react-js"
+```
+- On refreshing the browser,Cruddur app using was working but didnt seed any data when endpoint `messages/new/bayko` was used
+- It had a `UsersShort` error which is supposed to return an empty object.
+- Restarted Cruddur on my local machine and tried to debug and fix the issue.
+#### Fixing the Pathing
+- To fix issue had to seed data back into DynamoDB using:
+```sh
+bin/db/setup
+```
+- Didnt work kept giving different errors for all the files that will be used to seed data due to the `bin/db` pathing. Fixed the pathing error for the the following files; 
+- Updated the `setup` file script with:
+```sh
+ABS_PATH=$(readlink -f "$0")
+DB_PATH=$(dirname $ABS_PATH)
+
+source "$DB_PATH/drop"
+source "$DB_PATH/create"
+source "$DB_PATH/schema-load"
+source "$DB_PATH/seed"
+source "$DB_PATH/update_cognito_user_ids"
+```
+- Updated `schema-load` file with:
+```sh
+DB_PATH=$(dirname $ABS_PATH)
+BIN_PATH=$(dirname $DB_PATH)
+```
+- Updated `seed` file with:
+```sh
+ABS_PATH=$(readlink -f "$0")
+DB_PATH=$(dirname $ABS_PATH)
+
+source "$DB_PATH/drop"
+source "$DB_PATH/create"
+source "$DB_PATH/schema-load"
+source "$DB_PATH/seed"
+source "$DB_PATH/update_cognito_user_ids" 
+```
+#### Fix Connection Issues
+- After fixing pathing issues, ran the `bin/db/setup` again but it kept giving error of "Cruddur database being accessed by other users and having different numbers of sessions using the database" which shouldn't be because when database is down postgres shouldn't be running hence there should be no connection.
+- Fixed this by creating a new script to kill all connections in both the `bin/db` directory and `backend-flask/db` directory.
+- For `bin/db` new `kill-all` script
+```sh
+! /usr/bin/bash
+
+CYAN='\033[1;36m'
+NO_COLOR='\033[0m'
+LABEL="db-kill-all"
+printf "${CYAN}== ${LABEL}${NO_COLOR}\n"
+
+ABS_PATH=$(readlink -f "$0")
+DB_PATH=$(dirname $ABS_PATH)
+BIN_PATH=$(dirname $DB_PATH)
+PROJECT_PATH=$(dirname $BIN_PATH)
+BACKEND_FLASK_PATH="$PROJECT_PATH/backend-flask"
+kill_path="$BACKEND_FLASK_PATH/db/kill-all-connections.sql"
+echo $kill_path
+
+psql $CONNECTION_URL cruddur < $kill_path
+```
+- Made the file executable using;
+```sh
+chmod u+x bin/db/kill-all
+```
+- For `backend-flask/db` new `kill-all-connections.sql` file
+```sh
+SELECT pg_terminate_backend(pid) 
+FROM pg_stat_activity 
+WHERE 
+-- don't kill my own connection!
+pid <> pg_backend_pid()
+-- don't kill the connections to other databases
+AND datname = 'cruddur';
+```
+- This killed all the connections.
+- Updated the `seed` script because it still gave error of "no such file or directory" with;
+```sh
+seed_path="$BACKEND_FLASK_PATH/db/seed_path.sql"
+echo $seed_path
+```
+- Updated the `setup` script with 
+```sh
+python "$DB_PATH/update_cognito_user_ids"
+```
+- Also updated `bin/db/update_cognito_user_ids` because of error "No module named lib " which meant it couldn't find cognito user due to the new pathing with:
+```sh
+parent_path = os.path.abspath(os.path.join(current_path, '..', '..','backend-flask'))
+```
+- Then the `bin/db/setup` finally worked.
+- Ran the script `bin/ddb/schema-load` but it didnt work.
+- Updated my `bin/ddb/schema-load` file to delete the existing table because I kept getting the error 'ResourceInUseException'
+```sh
+# Check if the table already exists
+existing_tables = ddb.list_tables()['TableNames']
+if table_name in existing_tables:
+    # Delete the table if it exists
+    ddb.delete_table(TableName=table_name)
+    print(f"Deleted existing table: {table_name}")
+```
+- Ran `bin/ddb/seed` but didnt work due to similar problem with "lib".
+- Fixed it by updating `bin/ddb/seed` file and it worked, data was seeded.
+```sh
+parent_path = os.path.abspath(os.path.join(current_path, '..', '..','backend-flask'))
+```
+- Updated `backend-flask/lib/db.py` with;
+```sh
+ return "{}"
+```
+- This fixed the UsersShort issue.
+- Since code was changed, had to build, push and deploy backend again using:
+```sh
+bin/backend/build
+```
+- Didnt work gave error of "Unable to prepare path...not found" due to restructured paths.
+- Fixed this by updating both backend and frontend build files with;
+```sh
+BACKEND_PATH=$(dirname $ABS_PATH)
+BIN_PATH=$(dirname $BACKEND_PATH)
+
+FRONTEND_PATH=$(dirname $ABS_PATH)
+BIN_PATH=$(dirname $BACKEND_PATH)
+```
+- It worked then pushed and deployed image respectively using;
+```sh
+bin/backend/push
+
+bin/backend/deploy
+```
+- Seed data worked.
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/845e1a48-be2e-4167-b056-6b5ea763bf60)
+
+- New message worked
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/ff7fc06c-2473-4450-b0bd-14ac42ff5eeb)
+
