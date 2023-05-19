@@ -18,7 +18,7 @@
     },
 ```
 - Created new script files `register` to register task definitons in the `bin/backend` and `bin/frontend`folders respectively.
-- Backend 
+- For Backend 
 ```sh
 #! /usr/bin/bash
 
@@ -37,7 +37,7 @@ aws ecs register-task-definition \
 ```sh
 chmod u+x bin/backend/register
 ```
-- Frontend
+- For Frontend
 ```sh
 #! /usr/bin/bash
 
@@ -65,7 +65,8 @@ bin/ecr/login
 ```sh
 bin/backend/deploy
 ```
-- Created new scripts files for docker `run` command in the `bin/backend` folder.
+- Created new scripts files for docker `run` command for both the `bin/backend` and `bin/frontend` folders respectively.
+- For backend
 ```sh
 #! /usr/bin/bash
 
@@ -85,23 +86,10 @@ docker run --rm \
 ```sh
 chmod u+x bin/backend/run
 ```
-- Also created a new script file `generate-env` so the env vars can be passed when docker run is executed.
+- For frontend
 ```sh
-#!/usr/bin/env ruby
+#! /usr/bin/bash
 
-require 'erb'
-
-template = File.read 'erb/backend-flask.env.erb'
-content = ERB.new(template).result(binding)
-filename = "backend-flask.env"
-File.write(filename, content)   
-```
-- Made it executable
-```sh
-chmod u+x bin/backend/generate-env
-```
-- Replicated same new scripts files in the frontend that is `run` and `generate- env` both in the `bin/frontend` folder.
-```sh
 ABS_PATH=$(readlink -f "$0")
 BACKEND_PATH=$(dirname $ABS_PATH)
 BIN_PATH=$(dirname $BACKEND_PATH)
@@ -118,7 +106,23 @@ Made it executable
 ```sh
 chmod u+x bin/frontend/run
 ```
-- For `generate-env`
+- Also created new script files `generate-env` so the env vars can be passed when docker `run` is executed, for both `bin/frontend` and `bin/backend` folders.
+- For backend
+```sh
+#!/usr/bin/env ruby
+
+require 'erb'
+
+template = File.read 'erb/backend-flask.env.erb'
+content = ERB.new(template).result(binding)
+filename = "backend-flask.env"
+File.write(filename, content)   
+```
+- Made it executable
+```sh
+chmod u+x bin/backend/generate-env
+```
+- For Frontend `generate-env`
 ```sh
 #!/usr/bin/env ruby
 
@@ -129,7 +133,11 @@ content = ERB.new(template).result(binding)
 filename = "frontend-react-js.env"
 File.write(filename, content)
 ```
-- Detached the env vars from the `docker-compose.yml` file and created new folders and files for both the backend-flask and frontend-react-js.
+- Made it executable
+```sh
+chmod u+x bin/frontend/generate-env
+```
+- Detached the env vars from the `docker-compose.yml` file and created new folder `erb` and files `backend-flask.env.erb` and `frontend-react-js.env.erb` for both the backend-flask and frontend-react-js.
 - For backend-flask.env.erb
 ```sh
 AWS_ENDPOINT_URL=http://dynamodb-local:8000
@@ -160,10 +168,10 @@ REACT_APP_BACKEND_URL=https://4567-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GI
 #REACT_APP_BACKEND_URL = "https://4567-\#{ENV['GITPOD_WORKSPACE_ID']}.\#{ENV['GITPOD_WORKSPACE_CLUSTER_HOST']}"
 REACT_APP_AWS_PROJECT_REGION=<%= ENV['AWS_DEFAULT_REGION'] %>
 REACT_APP_AWS_COGNITO_REGION=<%= ENV['AWS_DEFAULT_REGION'] %>
-REACT_APP_AWS_USER_POOLS_ID=ca-central-1_CQ4wDfnwc
-REACT_APP_CLIENT_ID=5b6ro31g97urk767adrbrdj1g5
+REACT_APP_AWS_USER_POOLS_ID=us-east-1_nCzleL11X
+REACT_APP_CLIENT_ID=6rvluth75jaeg605hblpdhqmbq
 ```
-- Updated `gitpod.yaml` file.
+- Updated `gitpod.yaml` file to automate generating the env files for both backend and frontend whenever system is started.
 ```sh
 AWS_CLI_AUTO_PROMPT: on-partial
     before: |
@@ -244,7 +252,7 @@ services:
     environment:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
-      AWS_REGION: "ca-central-1"
+      AWS_REGION: "us-east-1"
     command:
       - "xray -o -b xray-daemon:2000"
     ports:
@@ -262,6 +270,7 @@ volumes:
   db:
     driver: local
 ```
+- Ran the command `bin/backend/run` to confirm the env vars are being set and also to shell into the backend, `bin/bash` is added at end of the `bin/backend/run` file above but removed immediately after because it's not supposed to be used for production.
 - Added a new script file `busybox` to aid in debugging backend in the `bin` folder.
 ```sh
 ! /usr/bin/bash
@@ -275,6 +284,15 @@ docker run --rm \
 ```sh
 chmod u+x bin/busybox
 ```
+- Updated backend-flask Dockerfile.prod with a code that can be used for debugging the container in production but should not be left or used .
+```sh
+# [TODO] For debugging, don't leave these in
+RUN apt-get update -y
+RUN apt-get install iputils-ping -y
+# -----
+```
+- I didnt have an x-ray issue in my ECS but kept having an error of unhealthy instances for my backend services hence they couldn't run.
+-  
 
 
       cd backend-flask
