@@ -32,7 +32,7 @@ class Ddb:
     # query the table
     response = client.query(**query_params)
     items = response['Items']
-
+    
 
     results = []
     for item in items:
@@ -74,8 +74,7 @@ class Ddb:
       })
     return results
   def create_message(client,message_group_uuid, message, my_user_uuid, my_user_display_name, my_user_handle):
-    now = datetime.now(timezone.utc).astimezone().isoformat()
-    created_at = now
+    created_at = datetime.now().isoformat()
     message_uuid = str(uuid.uuid4())
 
     record = {
@@ -163,4 +162,4 @@ class Ddb:
       }
     except botocore.exceptions.ClientError as e:
       print('== create_message_group.error')
-      print(e) 
+      print(e)
