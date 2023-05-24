@@ -1,7 +1,9 @@
 # Week 7 — Solving CORS with a Load Balancer and Custom Domain
 
-### Configure Task Defintions to contain X-ray and turn on Container Insights
-- To have Container insights an x-ray is necessary hence, updated my `aws/task-definitions/backend-flask.json` with an x-ray code.
+### Implementation of Xray on ECS and Container Insights
+
+#### Configure Task Defintions to contain X-ray and turn on Container Insights
+- To have Container insights, an x-ray is necessary hence, updated my `aws/task-definitions` files for both backend-flask.json and frontend-react.js with an x-ray code.
 ```sh
 {
       "name": "xray",
@@ -86,6 +88,7 @@ docker run --rm \
 ```sh
 chmod u+x bin/backend/run
 ```
+- N/B: To shell into the backend, `bin/bash` is added after the `-it backend-flask-prod` but removed immediately after because it's not supposed to be used for production.
 - For frontend
 ```sh
 #! /usr/bin/bash
@@ -106,8 +109,8 @@ Made it executable
 ```sh
 chmod u+x bin/frontend/run
 ```
-- Also created new script files `generate-env` so the env vars can be passed when docker `run` is executed, for both `bin/frontend` and `bin/backend` folders.
-- For backend
+- Also created new script files `generate-env`for gitpod workspace and `generate-env-codespace` for codespace workspace so the env vars can be passed when docker `run` is executed, for both `bin/frontend` and `bin/backend` folders.
+- For Gitpod backend `generate env` 
 ```sh
 #!/usr/bin/env ruby
 
@@ -122,7 +125,22 @@ File.write(filename, content)
 ```sh
 chmod u+x bin/backend/generate-env
 ```
-- For Frontend `generate-env`
+For Codespace Backend `generate env-codespace` 
+```sh
+#! /usr/bin/env ruby
+
+require 'erb'
+
+template = File.read '/workspaces/aws-bootcamp-cruddur-2023/erb/backend-flask-codespace.env.erb'
+content = ERB.new(template).result(binding)
+filename = "/workspaces/aws-bootcamp-cruddur-2023/backend-flask.env"
+File.write(filename, content)
+```
+- Made it executable
+```sh
+chmod u+x bin/backend/generate-env-codespace
+```
+- For Gitpod Frontend `generate-env` 
 ```sh
 #!/usr/bin/env ruby
 
@@ -137,30 +155,39 @@ File.write(filename, content)
 ```sh
 chmod u+x bin/frontend/generate-env
 ```
-- Detached the env vars from the `docker-compose.yml` file and created new folder `erb` and files `backend-flask.env.erb` and `frontend-react-js.env.erb` for both the backend-flask and frontend-react-js.
+- For Codespace Frontend `generate-env-codespace` 
+```sh
+#! /usr/bin/env ruby
+
+require 'erb'
+
+template = File.read '/workspaces/aws-bootcamp-cruddur-2023/erb/frontend-react-js-codespace.env.erb'
+content = ERB.new(template).result(binding)
+filename = "/workspaces/aws-bootcamp-cruddur-2023/frontend-react-js.env"
+File.write(filename, content)
+```
+- Made it executable
+```sh
+chmod u+x bin/frontend/generate-env-codespace
+```
+- Detached the env vars from the `docker-compose.yml` file and created new folder `erb` and files `backend-flask.env.erb` and `frontend-react-js.env.erb` for both the backend-flask and frontend-react-js which are now written in ruby language in order to enable docker to read and output the values of the Frontend and Backend URLs of gitpod and codespace workspaces correctly when running `generate-env` for the frontend and backend respesctively.
 - For backend-flask.env.erb
 ```sh
 AWS_ENDPOINT_URL=http://dynamodb-local:8000
 CONNECTION_URL=postgresql://postgres:password@db:5432/cruddur
 FRONTEND_URL=https://3000-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>
 BACKEND_URL=https://4567-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>
-#FRONTEND_URL = "https://3000-\#{ENV['GITPOD_WORKSPACE_ID']}.\#{ENV['GITPOD_WORKSPACE_CLUSTER_HOST']}"
-#BACKEND_URL = "https://4567-\#{ENV['GITPOD_WORKSPACE_ID']}.\#{ENV['GITPOD_WORKSPACE_CLUSTER_HOST']}"
-#FRONTEND_URL=https://3000-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>
-#BACKEND_URL=https://4567-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>
 OTEL_SERVICE_NAME=backend-flask
 OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
 OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<%= ENV['HONEYCOMB_API_KEY'] %>
 AWS_XRAY_URL=*4567-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>*
-#AWS_XRAY_URL=*4567-<%= ENV['CODESPACE_NAME'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>*
-#AWS_XRAY_URL = "*4567-\#{ENV['GITPOD_WORKSPACE_ID']}.\#{ENV['GITPOD_WORKSPACE_CLUSTER_HOST']}*"
 AWS_XRAY_DAEMON_ADDRESS=xray-daemon:2000
 AWS_DEFAULT_REGION=<%= ENV['AWS_DEFAULT_REGION'] %>
 AWS_ACCESS_KEY_ID=<%= ENV['AWS_ACCESS_KEY_ID'] %>
 AWS_SECRET_ACCESS_KEY=<%= ENV['AWS_SECRET_ACCESS_KEY'] %>
 ROLLBAR_ACCESS_TOKEN=<%= ENV['ROLLBAR_ACCESS_TOKEN'] %>
 AWS_COGNITO_USER_POOL_ID=<%= ENV['AWS_COGNITO_USER_POOL_ID'] %>
-AWS_COGNITO_USER_POOL_CLIENT_ID=6rvluth75jaeg605hblpdhqmbq
+AWS_COGNITO_USER_POOL_CLIENT_ID=<%= ENV['AWS_COGNITO_USER_POOL_CLIENT_ID']
 ```
 - For frontend-react-js.env.erb
 ```sh
@@ -270,7 +297,7 @@ volumes:
   db:
     driver: local
 ```
-- Ran the command `bin/backend/run` to confirm the env vars are being set and also to shell into the backend, `bin/bash` is added at end of the `bin/backend/run` file above but removed immediately after because it's not supposed to be used for production.
+- Ran the command `bin/backend/run` to confirm the env vars are being set.
 - Added a new script file `busybox` to aid in debugging backend in the `bin` folder.
 ```sh
 ! /usr/bin/bash
@@ -291,10 +318,44 @@ RUN apt-get update -y
 RUN apt-get install iputils-ping -y
 # -----
 ```
-- I didnt have an x-ray issue in my ECS but kept having an error of unhealthy instances for my backend services hence they couldn't run.
--  
-
-
-      cd backend-flask
-      pip install -r requirements.txt
+- I didnt have any X-ray issues in my ECS after i deployed it showed up but instead I kept having an error of unhealthy instances for my backend services hence they couldn't run any task.
+- Fixed this by updating the path in the `aws/task-definitions/backend-flask` file due to the restructuring of files earlier done from:
+```sh
+"command": [
+            "CMD-SHELL",
+            "python /backend-flask/bin/flask/health-check"
+          ],
 ```
+- With:
+```sh
+"command": [
+            "CMD-SHELL",
+            "python /backend-flask/bin/health-check"
+          ],
+```
+- To register the change to ECS ran: 
+```sh
+bin/backend/register 
+```
+- Re-built the docker image
+```sh
+bin/backend/build
+```
+- Pushed the new image to AWS ECS
+```sh
+bin/backend/push
+```
+- Then deployed it using:
+```sh
+bin/backend/deploy
+```
+- Also registered the change in the frontend task defintions for the `frontend-react-js`to include the X-ray that was added.
+```sh
+bin/frontend/register
+```
+- It worked and the instances became healthy with the X-ray working as well.
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/90c737de-ef4d-4d11-a2f2-2890e44f88c4)
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/fd7bd6be-7c23-4cb6-b62d-62971b366e2b)
+
