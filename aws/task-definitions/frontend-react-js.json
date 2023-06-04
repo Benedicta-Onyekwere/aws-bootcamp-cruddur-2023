@@ -52,7 +52,17 @@
               "awslogs-region": "us-east-1",
               "awslogs-stream-prefix": "frontend-react-js"
           }
-        }
+        },
+        "environment": [
+          {"name": "REACT_APP_AWS_PROJECT_REGION", "value": "us-east-1"},
+          {"name": "REACT_APP_AWS_COGNITO_REGION", "value": "us-east-1"},
+          {"name": "REACT_APP_AWS_COGNITO_USER_POOL_CLIENT_ID", "value": "6rvluth75jaeg605hblpdhqmbq"},
+          {"name": "REACT_APP_AWS_COGNITO_USER_POOLS_ID", "value": "us-east-1_nCzleL11X"},
+          {"name": "REACT_APP_FRONTEND_URL", "value": "https://bennieo.me"},
+          {"name": "REACT_APP_BACKEND_URL", "value": "https://api.bennieo.me"}
+         
+        ]
+
       }
     ]
   }

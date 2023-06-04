@@ -10,7 +10,7 @@
 		"AWS_CLI_AUTO_PROMPT": "on-partial"
 	},	
 	"runArgs": [
-		"--memory", "10g"   // Increase memory limit to 4GB
+		"--memory", "18g"   // Increase memory limit to 4GB
 	],
 	"customizations": {
 		"vscode": {
