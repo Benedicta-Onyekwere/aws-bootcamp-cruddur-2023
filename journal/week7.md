@@ -359,3 +359,240 @@ bin/frontend/register
 
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/fd7bd6be-7c23-4cb6-b62d-62971b366e2b)
 
+### Implementation Of Time Zone
+
+From the `bin/ddb/seed` folder, the following line of code is changed from;
+```sh
+now = datetime.now(timezone.utc).astimezone()
+```
+To the following
+```sh
+now = datetime.now()
+```
+From the same file, the following code is changed from;
+```sh
+  created_at = (now + timedelta(hours=-3) + timedelta(minutes=i)).isoformat()
+```
+To the following
+```sh
+  created_at = (now - timedelta(days=1) + timedelta(minutes=i)).isoformat()
+```  
+From the `backend/lib/ddb.py` folder, this code is also changed as well;
+```sh
+ now = datetime.now(timezone.utc).astimezone().isoformat()
+created_at = now
+```
+With the following
+```sh
+created_at = datetime.now().isoformat()
+```
+Then in the `frontend-react-js/src/lib` a new  file called `DateTimeFormats.js` is created with the following code;
+```sh
+import { DateTime } from 'luxon';
+
+export function format_datetime(value) {
+  const datetime = DateTime.fromISO(value, { zone: 'utc' })
+  const local_datetime = datetime.setZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  return local_datetime.toLocaleString(DateTime.DATETIME_FULL)
+}
+
+export function message_time_ago(value){
+  const datetime = DateTime.fromISO(value, { zone: 'utc' })
+  const created = datetime.setZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const now     = DateTime.now()
+  console.log('message_time_group',created,now)
+  const diff_mins = now.diff(created, 'minutes').toObject().minutes;
+  const diff_hours = now.diff(created, 'hours').toObject().hours;
+
+  if (diff_hours > 24.0){
+    return created.toFormat("LLL L");
+  } else if (diff_hours < 24.0 && diff_hours > 1.0) {
+    return `${Math.floor(diff_hours)}h`;
+  } else if (diff_hours < 1.0) {
+    return `${Math.round(diff_mins)}m`;
+  } else {
+    console.log('dd', diff_mins,diff_hours)
+    return 'unknown'
+  }
+}
+
+export function time_ago(value){
+  const datetime = DateTime.fromISO(value, { zone: 'utc' })
+  const future = datetime.setZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const now     = DateTime.now()
+  const diff_mins = now.diff(future, 'minutes').toObject().minutes;
+  const diff_hours = now.diff(future, 'hours').toObject().hours;
+  const diff_days = now.diff(future, 'days').toObject().days;
+
+  if (diff_hours > 24.0){
+    return `${Math.floor(diff_days)}d`;
+  } else if (diff_hours < 24.0 && diff_hours > 1.0) {
+    return `${Math.floor(diff_hours)}h`;
+  } else if (diff_hours < 1.0) {
+    return `${Math.round(diff_mins)}m`;
+  }
+}
+```
+Some modifications are done for the following files in the `frontend-react-js/src/components` folder:
+
+- MessageItem.js
+ The following code is removed
+```sh
+import { DateTime } from 'luxon';
+```
+And replaced with
+```sh
+import { format_datetime, message_time_ago } from '../lib/DateTimeFormats';
+```
+Same thing was done for the following code
+```sh
+<div className="created_at" title={props.message.created_at}>
+<span className='ago'>{format_time_created_at(props.message.created_at)}</span> 
+```
+Replaced with the following 
+```sh
+  <div className="created_at" title={format_datetime(props.message.created_at)}>
+  <span className='ago'>{message_time_ago(props.message.created_at)}</span> 
+```  
+This part of the code was also removed
+```sh
+<Link className='message_item' to={`/messages/@`+props.message.handle}>
+<div className='message_avatar'></div>
+```
+And replaced with the following
+```sh
+ <div className='message_item'>
+      <Link className='message_avatar' to={`/messages/@`+props.message.handle}></Link>
+```      
+Also removed 
+```sh
+ </Link>
+``` 
+Replaced with
+```sh
+ </div>
+``` 
+- MessageItem.css 
+
+This part of the code is removed
+```sh
+ cursor: pointer;
+text-decoration: none;
+```
+And replaced with
+```sh
+.message_item .avatar {
+  cursor: pointer;
+  text-decoration: none;
+}
+```
+
+- MessageGroupItem.js
+
+The following code is removed
+```sh
+import { DateTime } from 'luxon';
+```
+And replaced with
+```sh
+import { format_datetime, message_time_ago } from '../lib/DateTimeFormats';
+```
+The same is done for the following code
+```sh
+<div className="created_at" title={props.message_group.created_at}>
+<span className='ago'>{format_time_created_at(props.message_group.created_at)}</span> 
+```
+And replaced with the following
+```sh
+<div className="created_at" title={format_datetime(props.message_group.created_at)}>
+<span className='ago'>{message_time_ago(props.message_group.created_at)}</span> 
+```
+Also this part of the code is removed
+```sh
+const format_time_created_at = (value) => {
+    // format: 2050-11-20 18:32:47 +0000
+    const created = DateTime.fromISO(value)
+    const now     = DateTime.now()
+    const diff_mins = now.diff(created, 'minutes').toObject().minutes;
+    const diff_hours = now.diff(created, 'hours').toObject().hours;
+
+    if (diff_hours > 24.0){
+      return created.toFormat("LLL L");
+    } else if (diff_hours < 24.0 && diff_hours > 1.0) {
+      return `${Math.floor(diff_hours)}h`;
+    } else if (diff_hours < 1.0) {
+      return `${Math.round(diff_mins)}m`;
+    }
+  };
+  ```
+- ActivityContent.js file 
+- 
+The following code is removed
+```sh
+import { DateTime } from 'luxon';
+```
+And replaced with
+```sh
+import { format_datetime, time_ago } from '../lib/DateTimeFormats';
+```
+This code was also replaced
+```sh
+  <div className="created_at" title={props.activity.created_at}>
+  <span className='ago'>{format_time_created_at(props.activity.created_at)}</span>
+```  
+With the following
+```sh
+<div className="created_at" title={format_datetime(props.activity.created_at)}>
+<span className='ago'>{time_ago(props.activity.created_at)}</span>
+```
+This part of the code was also removed
+```sh
+  const format_time_created_at = (value) => {
+    // format: 2050-11-20 18:32:47 +0000
+    const past = DateTime.fromISO(value)
+    const now     = DateTime.now()
+    const diff_mins = now.diff(past, 'minutes').toObject().minutes;
+    const diff_hours = now.diff(past, 'hours').toObject().hours;
+
+    if (diff_hours > 24.0){
+      return past.toFormat("LLL L");
+    } else if (diff_hours < 24.0 && diff_hours > 1.0) {
+      return `${Math.floor(diff_hours)}h ago`;
+    } else if (diff_hours < 1.0) {
+      return `${Math.round(diff_mins)}m ago`;
+    }
+  };
+
+  const format_time_expires_at = (value) => {
+    // format: 2050-11-20 18:32:47 +0000
+    const future = DateTime.fromISO(value)
+    const now     = DateTime.now()
+    const diff_mins = future.diff(now, 'minutes').toObject().minutes;
+    const diff_hours = future.diff(now, 'hours').toObject().hours;
+    const diff_days = future.diff(now, 'days').toObject().days;
+
+    if (diff_hours > 24.0){
+      return `${Math.floor(diff_days)}d`;
+    } else if (diff_hours < 24.0 && diff_hours > 1.0) {
+      return `${Math.floor(diff_hours)}h`;
+    } else if (diff_hours < 1.0) {
+      return `${Math.round(diff_mins)}m`;
+    }
+  };
+```  
+The same changes to remove the following line of code was done
+```sh
+<span className='ago'>{format_time_expires_at(props.activity.expires_at)}</span>
+```
+And replaced with the following
+```sh
+<span className='ago'>{time_ago(props.activity.expires_at)}</span>
+```
+Same is for the following code
+```sh
+expires_at =  <div className="expires_at" title={props.activity.expires_at}>
+```
+Replaced with the following
+```sh
+expires_at =  <div className="expires_at" title={format_datetime(props.activity.expires_at)}>
+```
