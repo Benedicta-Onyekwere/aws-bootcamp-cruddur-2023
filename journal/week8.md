@@ -1,8 +1,12 @@
 # Week 8 — Serverless Image Processing
 
 This week we will be working with CDK.
+- [CDK](#cdk)
+- [Serving Avatars Via Cloudfront](#serving-avatars-via-cloudfront)
+- [Implementation User Profile Page](#implementation-user-profile-page)
 
-### CDK
+## CDK
+
 **What Is CDK?:**  CDK stands for Cloud Development Kit.It is an open-source software development framework provided by Amazon Web Services (AWS) that allows developers to define cloud infrastructure resources using familiar programming languages such as TypeScript, Python, Java, and C#.
 
 With CDK, developers can write code to define their infrastructure as code (IaC) using high-level constructs and patterns. It abstracts the low-level details of provisioning and configuring AWS resources and provides a more intuitive and efficient way to manage infrastructure.
@@ -36,6 +40,7 @@ npm install aws-cdk -g
       npm install aws-cdk -g
       cdk --version
 ```
+
 #### Initialize a new project
 To initialise a new project within the folder we created type:
 ```sh
@@ -45,6 +50,7 @@ Note instead of typescript, one can choose another language supported by cdk suc
 
 To work with the cdkfile, go to the file inside the `lib/thumbing-serverless-cdk-stack.ts`. This is where all the libraries are imported and codes for whatever 
 we want to deploy written.
+
 #### Provsioning an S3Bucket 
 Inside the `thumbing-serverless-cdk-stack.ts` file, the following code is added after uncommenting the commented parts to create an S3 bucket:
 ```sh
@@ -66,6 +72,7 @@ createBucket(bucketName: string): s3.IBucket {
 }
 
 ```
+
 To generate the AWS CloudFormation template for the CDK application run the command:
 ```sh
 cdk synth
@@ -89,12 +96,14 @@ cdk bootstrap "aws://AWS_ACCOUNt_ID/AWS_DEFAULT_REGION"
 For multiple regions
 cdk bootstrap aws://AWS_ACCOUNT_ID/AWS_DEFAULT_REGION AWS_ACCOUNT_ID/name of another REGION
 ```
+
 ### Creating Lambda
 The next step is to add lambda to our stack.
 From the folder, run the following command to install the dotenv dependency to import the file .env
 ```sh
  npm i dotenv
  ```
+ 
 Load the Environment variables for the lambda
 ```sh
 const uploadsBucketName: string = process.env.UPLOADS_BUCKET_NAME as string;
@@ -114,6 +123,7 @@ console.log('functionPath',functionPath)
 
 const lambda = this.createLambda(functionPath, uploadsBucketName, assetsBucketName, folderInput, folderOutput)
 ```
+
 Create the lambda function
 ```sh
   createLambda(functionPath: string, uploadsBucketName: string, assetsBucketName:string, folderInput: string, folderOutput: string): lambda.IFunction{
@@ -136,18 +146,21 @@ Note Lambda function needs at least 3 parameters Runtime (language of the code),
 
 Created a new file the .env.example inside of our cdk project with the following information:
 ```sh
-THUMBING_BUCKET_NAME="assets.bennieo.me"
+UPLOADS_BUCKET_NAME="bennieo-uploaded-avatars"
+ASSETS_BUCKET_NAME="assets.$DOMAIN_NAME"
 THUMBING_S3_FOLDER_INPUT="avatars/original"
 THUMBING_S3_FOLDER_OUTPUT="avatars/processed"
 THUMBING_WEBHOOK_URL="https://api.bennieo.me/webhooks/avatar"
 THUMBING_TOPIC_NAME="cruddur-assets"
 THUMBING_FUNCTION_PATH="/workspace/aws-bootcamp-cruddur-2023/aws/lambdas/process-images"
 ```
+
 It is a good practice to create a folder for the lambda codes for each project so it is to refer to which project belongs the code.
 Copied the .env.example file into the ".env" in order to load the env vars and this will be necessery for thumbing-serverless-cdk-stack file.
 ```sh
 cp .env.example .env
 ```
+
 #### Create Source Codes
 Created a new folder `process-images`with the following files with their contents below for the lambda in the `aws/lambdas` directory
 - Index.js file
@@ -183,6 +196,7 @@ exports.handler = async (event) => {
   await uploadProcessedImage(client,dstBucket,dstKey,processedImage)
 };
 ```
+
 - Test.js file
 ```sh
 const {getClient, getOriginalImage, processImage, uploadProcessedImage} = require('./s3-image-processing.js')
@@ -204,6 +218,7 @@ async function main(){
 
 main()
 ```
+
 - s3-image-processing.js file
 ```sh
 const sharp = require('sharp');
@@ -262,6 +277,7 @@ module.exports = {
   uploadProcessedImage: uploadProcessedImage
 }
 ```
+
 - example.json file.This file is just for reference in order to see the data structure.
 ```sh
 {
@@ -302,37 +318,42 @@ module.exports = {
     }
   ]
 ```
+
 #### Installing Packages
 Next thing is to install some necessary packages and to do this we have to be in the right path where lambda and the process-image is so from the terminal, move to or cd into `aws\lambdas\process-image\` and run the following command:
 ```sh
 npm init -y
 ```
 This creates a new init file.
+
 Launch these commands to install the libraries;
 ```sh
 npm i sharp
 npm i @aws-sdk/client-s3
 ```
+
 N/B: Make sure to type the name correctly when installing the libraries because there are so many junk libraries out there so that one does not accidentally install them. 
-The reason for the @aws-sdk/client-s3 is because the sdk library is broken up into a bunch of sub-packages or isolate packages so one can install exactly what one wants. Most sdks do this like Ruby and Nodejs, there are some where one has to install wholesale and some individually, individually is better because it results in smaller footprints. 
+The reason for the @aws-sdk/client-s3 is because the sdk library is broken up into a bunch of sub-packages or isolate packages so one can install exactly what one wants. Most sdks do this like Ruby and Nodejs, there are some where one has to install wholesale and some individually, individually is better because it results in smaller footprints.
+
 Before deploying, run `cdk synth` to check if the code is correct which gave the following output:
 ```sh
-bucketName assets.bennieo.me
+uploadsBucketName bennieo-uploaded-avatars
+assetsBucketName assets.$DOMAIN_NAME
 folderInput avatars/original
 folderOutput avatars/processed
-webhookUrl https://api.bennieo.me/webhooks/avatar
+webhookUrl https://api.$DOMAIN_NAME/webhooks/avatar
 topicName cruddur-assets
 functionPath /workspace/aws-bootcamp-cruddur-2023/aws/lambdas/process-images
 Resources:
-  AssetsBucket5CB76180:
+  UploadsBucket5E5E9B64:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: assets.bennieo.me
+      BucketName: uploads.bennieo.me
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
     Metadata:
-      aws:cdk:path: ThumbingServerlessCdkStack/AssetsBucket/Resource
-  AssetsBucketNotificationsA137991F:
+      aws:cdk:path: ThumbingServerlessCdkStack/UploadsBucket/Resource
+  UploadsBucketNotifications4592A072:
     Type: Custom::S3BucketNotifications
     Properties:
       ServiceToken:
@@ -340,20 +361,46 @@ Resources:
           - BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691
           - Arn
       BucketName:
-        Ref: AssetsBucket5CB76180
+        Ref: UploadsBucket5E5E9B64
       NotificationConfiguration:
         LambdaFunctionConfigurations:
           - Events:
               - s3:ObjectCreated:Put
-            Filter:
-              Key:
-                FilterRules:
-                  - Name: prefix
-                    Value: avatars/original
             LambdaFunctionArn:
               Fn::GetAtt:
-                - ThumbLambda5C775138
+                - thumbLambda4F6A0672
                 - Arn
+      Managed: true
+    DependsOn:
+      - UploadsBucketAllowBucketNotificationsToThumbingServerlessCdkStackthumbLambda1253FE4746FC7FD1
+    Metadata:
+      aws:cdk:path: ThumbingServerlessCdkStack/UploadsBucket/Notifications/Resource
+  UploadsBucketAllowBucketNotificationsToThumbingServerlessCdkStackthumbLambda1253FE4746FC7FD1:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+          - thumbLambda4F6A0672
+          - Arn
+      Principal: s3.amazonaws.com
+      SourceAccount:
+        Ref: AWS::AccountId
+      SourceArn:
+        Fn::GetAtt:
+          - UploadsBucket5E5E9B64
+          - Arn
+    Metadata:
+      aws:cdk:path: ThumbingServerlessCdkStack/UploadsBucket/AllowBucketNotificationsToThumbingServerlessCdkStackthumbLambda1253FE47
+  AssetsBucketNotificationsA137991F:
+    Type: Custom::S3BucketNotifications
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691
+          - Arn
+      BucketName: assets.bennieo.me
+      NotificationConfiguration:
         TopicConfigurations:
           - Events:
               - s3:ObjectCreated:Put
@@ -364,32 +411,14 @@ Resources:
                     Value: avatars/processed
             TopicArn:
               Ref: ThumbingTopic6D1C97CE
-      Managed: true
+      Managed: false
     DependsOn:
-      - AssetsBucketAllowBucketNotificationsToThumbingServerlessCdkStackThumbLambdaF947A79C32211236
       - ThumbingTopichttpsapibennieomewebhooksavatarBF7FA56E
       - ThumbingTopicPolicy9FC24222
       - ThumbingTopic6D1C97CE
     Metadata:
       aws:cdk:path: ThumbingServerlessCdkStack/AssetsBucket/Notifications/Resource
-  AssetsBucketAllowBucketNotificationsToThumbingServerlessCdkStackThumbLambdaF947A79C32211236:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName:
-        Fn::GetAtt:
-          - ThumbLambda5C775138
-          - Arn
-      Principal: s3.amazonaws.com
-      SourceAccount:
-        Ref: AWS::AccountId
-      SourceArn:
-        Fn::GetAtt:
-          - AssetsBucket5CB76180
-          - Arn
-    Metadata:
-      aws:cdk:path: ThumbingServerlessCdkStack/AssetsBucket/AllowBucketNotificationsToThumbingServerlessCdkStackThumbLambdaF947A79C
-  ThumbLambdaServiceRole4BE4E3E0:
+  thumbLambdaServiceRole961849F1:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -406,8 +435,8 @@ Resources:
               - Ref: AWS::Partition
               - :iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
     Metadata:
-      aws:cdk:path: ThumbingServerlessCdkStack/ThumbLambda/ServiceRole/Resource
-  ThumbLambdaServiceRoleDefaultPolicyB74653D4:
+      aws:cdk:path: ThumbingServerlessCdkStack/thumbLambda/ServiceRole/Resource
+  thumbLambdaServiceRoleDefaultPolicyBCEB6E65:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
@@ -417,32 +446,37 @@ Resources:
               - s3:PutObject
             Effect: Allow
             Resource:
-              Fn::Join:
-                - ""
-                - - Fn::GetAtt:
-                      - AssetsBucket5CB76180
-                      - Arn
-                  - /*
+              - Fn::Join:
+                  - ""
+                  - - "arn:"
+                    - Ref: AWS::Partition
+                    - :s3:::assets.bennieo.me/*
+              - Fn::Join:
+                  - ""
+                  - - Fn::GetAtt:
+                        - UploadsBucket5E5E9B64
+                        - Arn
+                    - /*
         Version: "2012-10-17"
-      PolicyName: ThumbLambdaServiceRoleDefaultPolicyB74653D4
+      PolicyName: thumbLambdaServiceRoleDefaultPolicyBCEB6E65
       Roles:
-        - Ref: ThumbLambdaServiceRole4BE4E3E0
+        - Ref: thumbLambdaServiceRole961849F1
     Metadata:
-      aws:cdk:path: ThumbingServerlessCdkStack/ThumbLambda/ServiceRole/DefaultPolicy/Resource
-  ThumbLambda5C775138:
+      aws:cdk:path: ThumbingServerlessCdkStack/thumbLambda/ServiceRole/DefaultPolicy/Resource
+  thumbLambda4F6A0672:
     Type: AWS::Lambda::Function
     Properties:
       Code:
         S3Bucket:
           Fn::Sub: cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
-        S3Key: dbc52e2f9a10c186ab7243f7caa1f865525515685db56961ce5f53a42b4d2f8a.zip
+        S3Key: cdc8425fb080cf2f85482b7cee899038be5fa8dfe94d7619d8dd9c6c98cdb9b2.zip
       Role:
         Fn::GetAtt:
-          - ThumbLambdaServiceRole4BE4E3E0
+          - thumbLambdaServiceRole961849F1
           - Arn
       Environment:
         Variables:
-          DEST_BUCKET_NAME: assets.bennieo.me
+          DEST_BUCKET_NAME: assets.$DOMAIN_NAME
           FOLDER_INPUT: avatars/original
           FOLDER_OUTPUT: avatars/processed
           PROCESS_WIDTH: "512"
@@ -450,11 +484,11 @@ Resources:
       Handler: index.handler
       Runtime: nodejs18.x
     DependsOn:
-      - ThumbLambdaServiceRoleDefaultPolicyB74653D4
-      - ThumbLambdaServiceRole4BE4E3E0
+      - thumbLambdaServiceRoleDefaultPolicyBCEB6E65
+      - thumbLambdaServiceRole961849F1
     Metadata:
-      aws:cdk:path: ThumbingServerlessCdkStack/ThumbLambda/Resource
-      aws:asset:path: asset.dbc52e2f9a10c186ab7243f7caa1f865525515685db56961ce5f53a42b4d2f8a
+      aws:cdk:path: ThumbingServerlessCdkStack/thumbLambda/Resource
+      aws:asset:path: asset.cdc8425fb080cf2f85482b7cee899038be5fa8dfe94d7619d8dd9c6c98cdb9b2
       aws:asset:is-bundled: false
       aws:asset:property: Code
   ThumbingTopic6D1C97CE:
@@ -469,7 +503,7 @@ Resources:
       Protocol: https
       TopicArn:
         Ref: ThumbingTopic6D1C97CE
-      Endpoint: https://api.bennieo.me/webhooks/avatar
+      Endpoint: https://api.$DOMAIN_NAME/webhooks/avatar
     Metadata:
       aws:cdk:path: ThumbingServerlessCdkStack/ThumbingTopic/https:----api.bennieo.me--webhooks--avatar/Resource
   ThumbingTopicPolicy9FC24222:
@@ -481,9 +515,11 @@ Resources:
             Condition:
               ArnLike:
                 aws:SourceArn:
-                  Fn::GetAtt:
-                    - AssetsBucket5CB76180
-                    - Arn
+                  Fn::Join:
+                    - ""
+                    - - "arn:"
+                      - Ref: AWS::Partition
+                      - :s3:::assets.bennieo.me
             Effect: Allow
             Principal:
               Service: s3.amazonaws.com
@@ -518,7 +554,9 @@ Resources:
     Properties:
       PolicyDocument:
         Statement:
-          - Action: s3:PutBucketNotification
+          - Action:
+              - s3:GetBucketNotification
+              - s3:PutBucketNotification
             Effect: Allow
             Resource: "*"
         Version: "2012-10-17"
@@ -741,24 +779,26 @@ Rules:
                   - "4"
                   - "5"
                 - Ref: BootstrapVersion
-        AssertDescription: CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI.
-
-
+        AssertDescription: CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI
 ```
+
 Next is to deploy the CDK project using the following code. Then to see what has been deployed, it is checked in AWS Cloudformation.
 ```sh
 cdk deploy
 ```
+
 If you rename a bucket and deploy the entire stack, this wont affect the changes, you need to destroy the entire stack and relaunch using the following command:
 ```sh
 cdk destroy
 ```
+
 In order to build sharp library for AWS lambda, this is done because in order to use it it has to be built in a particular way. This is done using the following commands:
 ```sh
 npm install
 rm -rf node_modules/sharp
 SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install --arch=x64 --platform=linux --libc=glibc sharp
 ```
+
 Using this same code, a new folder `severless` and script file `build` was created in the `bin/serverless` directory.
 ```sh
 #! /usr/bin/bash
@@ -774,6 +814,7 @@ npm install
 rm -rf node_modules/sharp
 SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install --arch=x64 --platform=linux --libc=glibc sharp
 ```
+
 Then in this same `serverless` folder another script file `clear` was created. 
 ```sh
 #! /usr/bin/bash
@@ -782,9 +823,10 @@ ABS_PATH=$(readlink -f "$0")
 SERVERLESS_PATH=$(dirname $ABS_PATH)
 DATA_FILE_PATH="$SERVERLESS_PATH/files/data.jpg"
 
-aws s3 rm "s3://assets.$DOMAIN_NAME/avatars/original/data.jpg"
-aws s3 rm "s3://assets.$DOMAIN_NAME/avatars/processed/data.jpg"
+aws s3 rm "s3://bennieo-uploaded-avatars/data.jpg"
+aws s3 rm "s3://assets.$DOMAIN_NAME/avatars/data.jpg"
 ```
+
 Also another script file `upload` and a `files` folder for uploading images for the s3 bucket were also created
 ```sh
 #! /usr/bin/bash
@@ -793,12 +835,14 @@ ABS_PATH=$(readlink -f "$0")
 SERVERLESS_PATH=$(dirname $ABS_PATH)
 DATA_FILE_PATH="$SERVERLESS_PATH/files/data.jpg"
 
-aws s3 cp "$DATA_FILE_PATH" "s3://assets.$DOMAIN_NAME/avatars/original/data.jpg"
+aws s3 cp "$DATA_FILE_PATH" "s3://bennieo-uploaded-avatars/data.jpg""
 ```
+
 Made the files executable at once using:
 ```sh
 chmod -R u+x bin/serverless
 ```
+
 #### Create S3 Event Notification to Lambda
 Next is to Create the s3 event notification to lambda in the `thumbing-serverless-cdk/lib/thumbing-serverless-cdk-stacks.ts` folder using the following code:
 ```sh
@@ -815,6 +859,7 @@ createS3NotifyToLambda(prefix: string, lambda: lambda.IFunction, bucket: s3.IBuc
   )
 }
 ```
+
 #### Create Policy and Permission for Bucket Access
 Added an import code for the s3 bucket in order to make it persistent so if we destroyed our stacks the s3 bucket isnt destroyed along with it;
 ```sh
@@ -825,6 +870,7 @@ importBucket(bucketName: string): s3.IBucket{
     return bucket;
   }
 ```
+
 Added perrmissions for s3 bucket for lambda using;
 ```sh
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -858,6 +904,7 @@ Cloudwatch logs
 
 
 Then added the codes for creating the following still in the `thumbing-serverless-cdk/lib/thumbing-serverless-cdk-stacks.ts` folder:
+
 #### Create SNS Topic
 ```sh
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -872,6 +919,7 @@ createSnsTopic(topicName: string): sns.ITopic{
   return snsTopic;
 }
 ```
+
 #### Create an SNS Subscription
 ```sh
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
@@ -885,6 +933,7 @@ createSnsSubscription(snsTopic: sns.ITopic, webhookUrl: string): sns.Subscriptio
   return snsSubscription;
 }
 ```
+
 #### Create S3 Event Notification to SNS
 ```sh
 this.createS3NotifyToSns(folderOutput,snsTopic,bucket)
@@ -898,6 +947,7 @@ createS3NotifyToSns(prefix: string, snsTopic: sns.ITopic, bucket: s3.IBucket): v
   );
 }
 ```
+
 #### Create Policy for SNS Publishing
 ```sh
 const snsPublishPolicy = this.createPolicySnSPublish(snsTopic.topicArn)
@@ -915,12 +965,14 @@ const snsPublishPolicy = this.createPolicySnSPublish(snsTopic.topicArn)
     return snsPublishPolicy;
   }
 ```
+
 #### Attach the Policies to the Lambda Role 
 ```sh
 lambda.addToRolePolicy(s3ReadWritePolicy);
 lambda.addToRolePolicy(snsPublishPolicy);
 ```
-The `thumbing-serverless-cdk-stacks.ts` file
+
+The thumbing-serverless-cdk-stacks.ts file
 ```sh
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -932,6 +984,8 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import * as dotenv from 'dotenv';
 
+// Load Env Variables
+//const dotenv= require('dotenv')
 dotenv.config();
 
 export class ThumbingServerlessCdkStack extends cdk.Stack {
@@ -939,62 +993,74 @@ export class ThumbingServerlessCdkStack extends cdk.Stack {
     super(scope, id, props);
 
     // The code that defines your stack goes here
-    const bucketName: string = process.env.THUMBING_BUCKET_NAME as string;
+    const uploadsBucketName: string = process.env.UPLOADS_BUCKET_NAME as string;
+    const assetsBucketName: string = process.env.ASSETS_BUCKET_NAME as string;
+    const functionPath: string = process.env.THUMBING_FUNCTION_PATH as string;
     const folderInput: string = process.env.THUMBING_S3_FOLDER_INPUT as string;
     const folderOutput: string = process.env.THUMBING_S3_FOLDER_OUTPUT as string;
     const webhookUrl: string = process.env.THUMBING_WEBHOOK_URL as string;
     const topicName: string = process.env.THUMBING_TOPIC_NAME as string;
-    const functionPath: string = process.env.THUMBING_FUNCTION_PATH as string;
-    console.log('bucketName',bucketName)
+    console.log('uploadsBucketName',uploadsBucketName)
+    console.log('assetsBucketName',assetsBucketName)
     console.log('folderInput',folderInput)
     console.log('folderOutput',folderOutput)
     console.log('webhookUrl',webhookUrl)
     console.log('topicName',topicName)
     console.log('functionPath',functionPath)
 
-    //const bucket = this.createBucket(bucketName);
-    const bucket = this.importBucket(bucketName);
+    const uploadsBucket = this.createBucket(uploadsBucketName);
+    const assetsBucket = this.importBucket(assetsBucketName);
+    //create a lambda
+    const lambda = this.createLambda(
+      functionPath,
+      uploadsBucketName,
+      assetsBucketName,
+      folderInput,
+      folderOutput
+    );
 
-    // create a lambda
-    const lambda = this.createLambda(functionPath, bucketName, folderInput, folderOutput);
+    //create topic and subscription
+    const snsTopic = this.createSnsTopic(topicName);
+    this.createSnsSubscription(snsTopic,webhookUrl);
 
-    // create topic and subscription
-    const snsTopic = this.createSnsTopic(topicName)
-    this.createSnsSubscription(snsTopic,webhookUrl)
+    //add our s3 event notification
+    this.createS3NotifyToLambda(folderInput,lambda,uploadsBucket);
+    this.createS3NotifyToSns(folderOutput,snsTopic,assetsBucket);
 
-    // add our s3 event notifications
-    this.createS3NotifyToLambda(folderInput,lambda,bucket)
-    this.createS3NotifyToSns(folderOutput,snsTopic,bucket)
+    //create policies
+    const s3UploadsReadWritePolicy = this.createPolicyBucketAccess(uploadsBucket.bucketArn);
+    const s3AssetsReadWritePolicy = this.createPolicyBucketAccess(assetsBucket.bucketArn);
 
-    // create policies
-    const s3ReadWritePolicy = this.createPolicyBucketAccess(bucket.bucketArn)
     //const snsPublishPolicy = this.createPolicySnSPublish(snsTopic.topicArn)
 
-    // attach policies for permissions
-    lambda.addToRolePolicy(s3ReadWritePolicy);
+   //attach policies
+    lambda.addToRolePolicy(s3UploadsReadWritePolicy);
+    lambda.addToRolePolicy(s3AssetsReadWritePolicy);
     //lambda.addToRolePolicy(snsPublishPolicy);
+    
+
   }
 
-  createBucket(bucketName: string): s3.IBucket {
-    const bucket = new s3.Bucket(this, 'AssetsBucket', {
+  createBucket(bucketName: string): s3.IBucket{
+    const bucket = new s3.Bucket(this, 'UploadsBucket', {
       bucketName: bucketName,
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
     return bucket;
   }
 
-  importBucket(bucketName: string): s3.IBucket {
-    const bucket = s3.Bucket.fromBucketName(this,"AssetsBucket",bucketName);
+  importBucket(bucketName: string): s3.IBucket{
+    const bucket = s3.Bucket.fromBucketName(this,"AssetsBucket", bucketName);
     return bucket;
   }
 
-  createLambda(functionPath: string, bucketName: string, folderInput: string, folderOutput: string): lambda.IFunction {
-    const lambdaFunction = new lambda.Function(this, 'ThumbLambda', {
+  createLambda(functionPath: string, uploadsBucketName: string, assetsBucketName:string, folderInput: string, folderOutput: string): lambda.IFunction{
+    const lambdaFunction = new lambda.Function(this, 'thumbLambda', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(functionPath),
       environment: {
-        DEST_BUCKET_NAME: bucketName,
+        DEST_BUCKET_NAME: assetsBucketName,
         FOLDER_INPUT: folderInput,
         FOLDER_OUTPUT: folderOutput,
         PROCESS_WIDTH: '512',
@@ -1002,14 +1068,14 @@ export class ThumbingServerlessCdkStack extends cdk.Stack {
       }
     });
     return lambdaFunction;
-  } 
+  }
 
   createS3NotifyToLambda(prefix: string, lambda: lambda.IFunction, bucket: s3.IBucket): void {
     const destination = new s3n.LambdaDestination(lambda);
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED_PUT,
-      destination,
-      {prefix: prefix} // folder to contain the original images
+      destination//,
+      //{prefix: prefix}
     )
   }
 
@@ -1040,7 +1106,7 @@ export class ThumbingServerlessCdkStack extends cdk.Stack {
     )
     return snsSubscription;
   }
-
+  
   createS3NotifyToSns(prefix: string, snsTopic: sns.ITopic, bucket: s3.IBucket): void {
     const destination = new s3n.SnsDestination(snsTopic)
     bucket.addEventNotification(
@@ -1050,18 +1116,123 @@ export class ThumbingServerlessCdkStack extends cdk.Stack {
     );
   }
 
-  /*
-  createPolicySnSPublish(topicArn: string){
-    const snsPublishPolicy = new iam.PolicyStatement({
-      actions: [
-        'sns:Publish',
-      ],
-      resources: [
-        topicArn
-      ]
-    });
-    return snsPublishPolicy;
-  }
-  */
+  
+  //createPolicySnSPublish(topicArn: string){
+    //const snsPublishPolicy = new iam.PolicyStatement({
+      //actions: [
+        //'sns:Publish',
+      //],
+      //resources: [
+        //topicArn
+      //]
+    //});
+    //return snsPublishPolicy;
+ //}
+
 }
 ```
+ 
+## Serving Avatars Via Cloudfront
+
+We are going to be serving our images or assets using CDN which means Content Distribution Network. This is done because we dont want to download our images every single time and serve them up for the application instead we are using Cloudfront which is a CDN. 
+
+To do this we need to create Cloudfront in AWS as shown below:
+
+![Screenshot 2023-06-15 at 00-57-44 Create - Distributions - CloudFront](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/0cbea857-6ba1-41b7-a9a1-c1a43a11032a)
+
+
+After creating it tested it on the browser to see if it will output my image using my DNS assets.bennieo.me/avartars/processed/data.jpg but it didnt.
+
+Configured Route53 to point to the CDN by creating a record in Route53 but it still didnt work.
+
+To configure the bucket policy because it is a requirement that will grant the bucket permission to be publicly accessisble because the bucket accessibility was blocked, clicked on origins in cloudfront and then edit and copied the policy. Next went to my s3 bucket permissions and attached the policy then saved it and it then worked.
+
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/b98e70da-2a5f-4e0f-9022-a5e94e863efb)
+
+
+## Implementation User Profile Page
+
+A new script file `bootstrap` is created in the bin directory with the following content:
+```sh
+#! /usr/bin/bash
+set -e
+CYAN='\033[1;36m'
+NO_COLOR='\033[0m'
+LABEL="bootstrap"
+printf "${CYAN}==== ${LABEL}${NO_COLOR}\n"
+
+ABS_PATH=$(readlink -f "$0")
+bin_dir=$(dirname $ABS_PATH)
+
+echo "Creation local database"
+source "$bin_dir/db/setup"
+echo "Creation local dynamodb"
+python3 "$bin_dir/ddb/schema-load"
+echo "Seeding mock data"
+python3 "$bin_dir/ddb/seed"
+```
+
+Another file `show.sql` was created in the `backend-flask/db/sql/users` folder with:
+```sh
+SELECT
+ (SELECT COALESCE(row_to_json(object_row),'{}'::json) FROM (
+    SELECT  
+      users.uuid,
+      users.handle,
+      users.display_name
+      (SELECT
+        count(true)
+       FROM public.activities
+       WHERE
+        activities.users_uuid=users.uuid) as cruds_count
+  ) object_row) as profile,
+  (SELECT COALESCE(array_to_json(array_agg(row_to_json(array_row))),'[]'::json) FROM (
+    SELECT
+      activities.uuid,
+      users.display_name,
+      users.handle,
+      activities.message,
+      activities.created_at,
+      activities.expires_at
+    FROM public.activities
+    WHERE
+      activities.user_uuid = users.uuid
+    ORDER by activities.created_at DESC
+    LIMIT 40
+  ) array_row) as activities
+FROM public.users
+WHERE
+  users.handle = %(handle)s
+```
+The `users_activities.py` file in the backend-flask/services folder, was updated with the following:
+This code was changed 
+```sh
+  now = datetime.now(timezone.utc).astimezone()
+      
+      if user_handle == None or len(user_handle) < 1:
+        model['errors'] = ['blank_user_handle']
+      else:
+        now = datetime.now()
+        results = [{
+          'uuid': '248959df-3079-4947-b847-9e0892d1bab4',
+          'handle':  'Andrew Brown',
+          'message': 'Cloud is fun!',
+          'created_at': (now - timedelta(days=1)).isoformat(),
+          'expires_at': (now + timedelta(days=31)).isoformat()
+        }]
+        model['data'] = results
+```
+With
+```sh
+      if user_handle == None or len(user_handle) < 1:
+        model['errors'] = ['blank_user_handle']
+      else:
+        sql = db.template('users','show')
+        results = db.query_object_json(sql,{'handle': user_handle})
+        return results
+```
+
+
+
+
