@@ -1233,6 +1233,209 @@ With
         return results
 ```
 
+Created a new component files `EditProfileButton.js` and `EditProfileButton.css` in the `frontend-react-js/src/components` folder this allows the users to edit their profile.  
+EditProfileButton.js
+```sh
+import './EditProfileButton.css';
+import EditProfileButton from '../components/EditProfileButton';
 
+export default function EditProfileButton(props) {
+  const pop_profile_form = (event) => {
+    event.preventdefault();
+    props.setPopped(true);
+    return false;
+  }
 
+  return (
+    <button onClick={pop_profile_form} className='profile-edit-button' href="#">Edit Profile</button>
+  );
+}
+```
 
+EditProfileButton.css
+```sh
+.profile-edit-button {
+  border: solid 1px rgba (255,255,255,0.5);
+  padding: 12px 20px;
+  font-size: 18px;
+  background: none;
+  border-radius: 999px;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+}
+
+.profile-edit-button:hover {
+  background:  rgba(255,255,255,0.3);
+}
+```
+
+The `ActivityFeed.js` file in the `frontend-react-js/src/components` is updated with the following line of code:
+```sh
+export default function ActivityFeed(props) {
+  return (
+
+    <div className='activity_feed_collection'>
+      {props.activities.map(activity => {
+      return  <ActivityItem setReplyActivity={props.setReplyActivity} setPopped={props.setPopped} key={activity.uuid} activity={activity} />
+      })}
+    </div>
+  );
+}
+```
+
+ The `HomeFeedPage.js` file in the `frontend-react-js/scr/pages` folder is refactored with the following:
+ ```sh
+ return (
+    <article>
+      <DesktopNavigation user={user} active={'home'} setPopped={setPopped} />
+      <div className='content'>
+        <ActivityForm
+          user_handle={user} 
+          popped={popped}
+          setPopped={setPopped} 
+          setActivities={setActivities} 
+        />
+        <ReplyForm 
+          activity={replyActivity} 
+          popped={poppedReply} 
+          setPopped={setPoppedReply} 
+          setActivities={setActivities} 
+          activities={activities} 
+        />
+        <div className='activity_feed'>
+          <div className='activity_feed_heading'>
+            <div className='title'>Home</div>
+          </div>
+        <ActivityFeed 
+            setReplyActivity={setReplyActivity} 
+            setPopped={setPoppedReply} 
+            activities={activities} 
+          />
+        </div>
+      </div>
+      <DesktopSidebar user={user} />
+    </article>
+  );
+ ```
+Same refactoring is also done for `NotificationsFeedPage.js` in the same folder with:
+```sh
+return (
+    <article>
+      <DesktopNavigation user={user} active={'notification'} setPopped={setPopped} />
+      <div className='content'>
+        <ActivityForm  
+          popped={popped}
+          setPopped={setPopped} 
+          setActivities={setActivities} 
+        />
+        <ReplyForm 
+          activity={replyActivity} 
+          popped={poppedReply} 
+          setPopped={setPoppedReply} 
+          setActivities={setActivities} 
+          activities={activities} 
+        />
+        <div className='activity_feed'>
+          <div className='activity_feed_heading'>
+            <div className='title'>Notifications</div>
+          </div>
+          <ActivityFeed 
+            title="Notification" 
+            setReplyActivity={setReplyActivity} 
+            setPopped={setPoppedReply} 
+            activities={activities} 
+          />
+        </div>
+      </div>
+      <DesktopSidebar user={user} />
+    </article>
+  );
+}
+```
+Created new files `ProfileHeading.js` and `ProfileHeading.css` also in the `frontend-react-js/src/components` folder.
+ProfileHeading.js
+```sh
+import './ProfileHeading.css';
+
+export default function ProfileHeading(props) {
+  const backgroundImage = 'url("https://assets.example.com/banners/banner.jpg")';
+  const style = {
+    backgroundImage: backgroundImage,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+  return (
+  <div className='activity_feed_heading profile_heading'>
+    <div className='title'>{props.profile.display_name}</div>
+    <div className="cruds_count">{props.profile.cruds_count} Cruds</div>
+    <div className="banner" style={styles}>
+      <div className="avatar">
+        <img src="https://assets.example.com/avatars/data.jpg"></ img>  
+      </div>
+    </div>
+    <div classname="info">
+      <div class='id'>
+        <div className="display_name">{props.profile.display_name}</div>
+        <div className="handle">@{props.profile.handle}</div>
+      </div>
+      <EditProfileButton setPopped={props.setPopped} />  
+    </div>
+  </div>
+  );
+}
+```
+
+ProfileHeading.css
+```sh
+.profile_heading {
+  padding-bottom: 0px;
+}
+.profile_heading .avatar {
+  position: absolute;
+  bottom: -74px;
+  left: 16px;
+}
+
+.profile_heading .avatar img {
+  width: 150px;
+  height: 150px;
+  border-radius: 999px;
+  border: solid 8px var(--fg);
+}
+
+.profile_heading .banner {
+  position: relative; 
+  height: 200;
+}
+
+.profile_heading .info {
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  padding: 16px;
+}
+
+.profile_heading .info .id {
+  padding-top: 70px;
+  flex-grow: 1;
+}
+
+.profile_heading .info .id .display_name {
+  font-size: 24px;
+  font-weight: bold;
+  color: rgb(255,255,255);
+    
+}
+
+.profile_heading .info .id .handle {
+  font-size: 16px;
+  color: rgb(255,255,255,0.7);
+
+}
+
+.profile_heading .cruds_Count{
+  color: rgb(255,255,255,0.7);
+}
+```
+
+To create a background image for the profile, created a folder named banners in S3 bucket assets.example.com and loaded the background image named banner.jpg.
