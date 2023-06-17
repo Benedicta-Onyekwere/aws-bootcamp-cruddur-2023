@@ -42,6 +42,7 @@ RUN pip install flask-cors
 COPY . .
 
 EXPOSE ${PORT}
+ENV PYTHONUNBUFFERED=1
 
 # CMD(Command to run flask)
 # python3 -m flask run --host=0.0.0 --port=4567
