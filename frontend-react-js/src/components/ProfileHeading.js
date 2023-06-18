@@ -1,6 +1,5 @@
 import './ProfileHeading.css';
 import EditProfileButton from '../components/EditProfileButton';
-
 export default function ProfileHeading(props) {
   const backgroundImage = 'url("https://assets.bennieo.me/banners/banner.jpg")';
   const styles = {
@@ -25,9 +24,6 @@ export default function ProfileHeading(props) {
       <EditProfileButton setPopped={props.setPopped} />
     </div>
     <div class="bio">{props.profile.bio}</div>
-
-
-    
 
   </div>
   );

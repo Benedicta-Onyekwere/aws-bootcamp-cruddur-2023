@@ -12,24 +12,20 @@
   border-radius: 999px;
   border: solid 8px var(--fg);
 }
-
 .profile_heading .banner {
   position: relative;
   height: 200px;
 }
-
 .profile_heading .info {
   display: flex;
   flex-direction: row;
   align-items: start;
   padding: 16px;
 }
-
 .profile_heading .info .id {
   padding-top: 70px;
   flex-grow: 1;
 }
-
 .profile_heading .info .id .display_name {
   font-size: 24px;
   font-weight: bold;
@@ -38,9 +34,13 @@
 .profile_heading .info .id .handle {
   font-size: 16px;
   color: rgba(255,255,255,0.7);
-} 
+}
+
+.profile_heading .cruds_count {
+  color: rgba(255,255,255,0.7);
+}
 
 .profile_heading .bio {
   padding: 16px;
-  color: rgba (255,255,255,0.7);
+  color: rgba(255,255,255,0.7);
 }
