@@ -3,8 +3,9 @@
 This week we will be working with CDK.
 - [CDK](#cdk)
 - [Serving Avatars Via Cloudfront](#serving-avatars-via-cloudfront)
-- [Implementation User Profile Page](#implementation-user-profile-page)
+- [Implementation of User Profile Page](#implementation-of-user-profile-page)
 - [Implementation of Migration Backend Endpoint and profile form](#implementation-of-migration-backend-endpoint-and-profile-form)
+- [Implementation of Avatar Upload](#implementation-of-avatar-upload)
 
 ## CDK
 
@@ -1149,10 +1150,7 @@ Configured Route53 to point to the CDN by creating a record in Route53 but it st
 To configure the bucket policy because it is a requirement that will grant the bucket permission to be publicly accessisble because the bucket accessibility was blocked, clicked on origins in cloudfront and then edit and copied the policy. Next went to my s3 bucket permissions and attached the policy then saved it and it then worked.
 
 
-![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/b98e70da-2a5f-4e0f-9022-a5e94e863efb)
-
-
-## Implementation User Profile Page
+## Implementation of User Profile Page
 
 A new script file `bootstrap` is created in the bin directory with the following content:
 ```sh
@@ -1761,7 +1759,7 @@ WHERE
 RETURNING handle;
 ```
 
-Created a new folder `generate`  and file `migration`in the `bin` folder. 
+Created a new folder `generate`  and file `migration`in the `bin/generate` folder. 
 ```sh
 #!/usr/bin/env python3
 import time
@@ -2020,11 +2018,16 @@ def query_value(self,sql,params={},verbose=True):
 ```
 
 Schema.sql worked
+
+
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/248976c9-c034-4bd3-ab5e-fa0027d82509)
 
 
 migrate and rollback script worked
+
+
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/e77e1d6c-f011-477a-9bd4-cb48a19830a0)
+
 
 
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/36d1fe1e-9101-4598-98ef-cfcef3ee820f)
@@ -2043,7 +2046,128 @@ ProfileHeading.css
 ```
 
 Bio
+
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/dd0dd23a-22f2-4d2a-aa2c-e14ae7990bfb)
+
+
+
+
+## Implementation of Avatar Upload
+
+In this section, we are implementing the Client-side javascript upload for s3 bucket. To do this, we need to to first generate a presigned url to upload an object. The way to trigger this is by uploading a file and when the file is attached, we can call an api endpoint to the server to give back a presigned url for a particular location then we can use that to do the upload. So we will be using an api gateway to do this. Then used the following steps below to achieve this.
+
+Requirements:
+
+Install Thunder Client from VScode Extensions. This tool will be necessary to test the api that we will be generating. 
+
+Created a new Lambda function using Ruby named `cruddur-upload-avatar`.
+
+Created a new folder `cruddur-upload-avatar`and file `function.rb` in the aws/lambdas/cruddur-upload-avatar` folder. 
+function.rb
+```sh 
+#use for debugging
+require 'aws-sdk-s3'
+require 'json'
+require 'aws-sdk-ssm'
+require 'jwt'
+
+def handler(event:, context:)
+  # Create an AWS SSM client
+  ssm_client = Aws::SSM::Client.new
+  # Retrieve the value of an environment variable from SSM Parameter Store
+  response = ssm_client.get_parameter({
+    name: '/cruddur/CruddurAvatarUpload/LAMBDA_FRONTEND',
+    with_decryption: true
+  })
+  # Access the environment variable value
+  frontend_url = response.parameter.value
+  puts frontend_url
+
+  puts event
+  # Return CORS headers for preflight check
+  if event['routeKey'] == "OPTIONS /{prefix+}"
+    puts({ step: 'preflight', message: 'preflight CORS check' }.to_json)
+    {
+      headers: {
+        "Access-Control-Allow-Headers": "*, Authorization",
+        "Access-Control-Allow-Origin": frontend_url,
+        "Access-Control-Allow-Methods": "OPTIONS,GET,POST"
+      },
+      statusCode: 200,
+    }
+  else
+    token = event['headers']['authorization'].split(' ')[1]
+    puts({ step: 'presigned url', access_token: token }.to_json)
+    
+    body_hash = JSON.parse(event["body"])
+    extension = body_hash["extension"]
+
+    decoded_token = JWT.decode token, nil, false
+    puts decoded_token
+    cognito_user_uuid = decoded_token[0]['sub']
+    s3 = Aws::S3::Resource.new
+    bucket_name = ENV["UPLOADS_BUCKET_NAME"]
+    object_key = "#{cognito_user_uuid}.#{extension}"
+
+    puts({object_key: object_key}.to_json)
+
+    obj = s3.bucket(bucket_name).object(object_key)
+    url = obj.presigned_url(:put, expires_in: 300)
+    url # this is the data that will be returned
+    body = { url: url }.to_json
+    {
+      headers: {
+        "Access-Control-Allow-Headers": "*, Authorization",
+        "Access-Control-Allow-Origin": frontend_url,
+        "Access-Control-Allow-Methods": "OPTIONS,GET,POST"
+      },
+      statusCode: 200,
+      body: body
+    }
+  end
+end
+#puts handler(
+#  event: {},
+#  context: {}
+#)
+```
+
+Next is to generate Gemfiles which manages libraries same way as we have package.json and requirements.txt files. The Gemfiles are generated using the following steps:
+- cd into `aws/lambdas/cruddur-upload-avatar` folder.
+- Run command which generates the Gemfile.
+```sh
+bundle init
+```
+- In the generated Gemfile add the following codes:
+```sh
+gem "aws-sdk-s3"
+gem "ox"
+get "jwt"
+```
+- Run the following command to install them
+```sh
+bundle install
+```
+- Make sure to have included UPLOADS_BUCKET_NAME to env by exporting it.
+- Execute `functin.rb` using the command:
+```sh
+bundle exec ruby function.rb
+
+Output
+{}
+{:statusCode=>200, :body=>"{\"url\":\"https://bennieo-uploaded-avatars.s3.amazonaws.com/mock.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA5JY273DFV43LV5DQ%2F20230624%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20230624T015501Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=2c4aff149ae88136ea32ea497594c5bf5feeb703bdc87c02df8637cbb82b671b\"}"}
+```
+- Upload Star trek lore in the `aws/lambdas/cruddue-upload-avatar` folder.
+
+- The url generated above is then copied and paste into the thunder client. To test if the upload will work, uploaded an image Lore from star trek, clicked on the the body and then binar and choose the image which then uploads the image and instead of Get it is changed to Put on the Url part and then click on send and if everything is ok and it works it will return a 200 we can then go to our s3 bucket in AWS and confirm it was sent.
+
+
+
+
+
+
+
+
 
 
 
