@@ -1,6 +1,7 @@
 import './UserFeedPage.css';
 import React from "react";
 import { useParams } from 'react-router-dom';
+
 import DesktopNavigation  from '../components/DesktopNavigation';
 import DesktopSidebar     from '../components/DesktopSidebar';
 import ActivityFeed from '../components/ActivityFeed';
@@ -10,6 +11,7 @@ import ProfileForm from '../components/ProfileForm';
 
 
 import {checkAuth, getAccessToken} from '../lib/CheckAuth';
+
 export default function UserFeedPage() {
   const [activities, setActivities] = React.useState([]);
   const [profile, setProfile] = React.useState([]);
@@ -17,7 +19,9 @@ export default function UserFeedPage() {
   const [poppedProfile, setPoppedProfile] = React.useState([]);
   const [user, setUser] = React.useState(null);
   const dataFetchedRef = React.useRef(false);
+
   const params = useParams();
+
   const loadData = async () => {
     try {
       const backend_url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/@${params.handle}`
@@ -31,6 +35,7 @@ export default function UserFeedPage() {
       });
       let resJson = await res.json();
       if (res.status === 200) {
+        console.log('setprofile',resJson.profile)
         setProfile(resJson.profile)
         setActivities(resJson.activities)
       } else {
@@ -40,19 +45,21 @@ export default function UserFeedPage() {
       console.log(err);
     }
   };
+
   React.useEffect(()=>{
     //prevents double call
     if (dataFetchedRef.current) return;
     dataFetchedRef.current = true;
+
     loadData();
     checkAuth(setUser);
   }, [])
+
   return (
     <article>
       <DesktopNavigation user={user} active={'profile'} setPopped={setPopped} />
       <div className='content'>
         <ActivityForm popped={popped} setActivities={setActivities} />
-
         <ProfileForm 
           profile={profile}
           popped={poppedProfile} 
