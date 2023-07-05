@@ -6,6 +6,7 @@ This week we will be working with CDK.
 - [Implementation of User Profile Page](#implementation-of-user-profile-page)
 - [Implementation of Migration Backend Endpoint and profile form](#implementation-of-migration-backend-endpoint-and-profile-form)
 - [Implementation of Avatar Upload](#implementation-of-avatar-upload)
+- [Rendering Avatar using Cloudfront](#rendering-avatar-using-cloudfront)
 
 ## CDK
 
@@ -1759,7 +1760,7 @@ WHERE
 RETURNING handle;
 ```
 
-Created a new folder `generate`  and file `migration`in the `bin/generate` folder. 
+Created a new folder `generate`  and file `migration`in the `./bin/generate` folder. 
 ```sh
 #!/usr/bin/env python3
 import time
@@ -1816,9 +1817,9 @@ Made it executable using;
 chmod u+x bin/generate/migration
 ```
 
-Created a new folder `migrations` in the `backend-flask/db`. This is where the output of the `bin/generate/migration` will be launched using the command;
+Created a new folder `migrations` in the `backend-flask/db`. This is where the output of the `./bin/generate/migration` will be launched using the command;
 ```sh
-bin/generate/migration add_bio_column
+./bin/generate/migration add_bio_column
 ```
 This script generated a file `1687055262088531_add_bio_column.py` in the `backend-flask/migrations` folder which is then updated with SQL commands .
 ```sh
@@ -1847,7 +1848,7 @@ class AddBioColumnMigration:
 migration = AddBioColumnMigration
 ```
 
-Created new executable scripts `bin/db/migrate` and `bin/db/rollback` in the `bin/db` folder. When command `/bin/db/migrate` is run, a new column called `bio` will be created in the db table of users. While the `bin/db/rollback` takes it back to it's previous state that is without the bio column.
+Created new executable scripts `./bin/db/migrate` and `./bin/db/rollback` in the `bin/db` folder. When command `./bin/db/migrate` is run, a new column called `bio` will be created in the db table of users. While the `bin/db/rollback` takes it back to it's previous state that is without the bio column.
 Migrate
 ```sh
 #!/usr/bin/env python3
@@ -2058,11 +2059,13 @@ In this section, we are implementing the Client-side javascript upload for s3 bu
 
 Requirements:
 
-Install Thunder Client from VScode Extensions. This tool will be necessary to test the api that we will be generating. 
+Install Thunder Client from VScode Extensions. This tool will be necessary to test the api that I will be generating. 
+
+#### Create Cruddur Upload Avatar Lambbda Function
 
 Created a new Lambda function using Ruby named `cruddur-upload-avatar`.
 
-Created a new folder `cruddur-upload-avatar`and file `function.rb` in the aws/lambdas/cruddur-upload-avatar` folder. 
+Created a new folder `cruddur-upload-avatar`and file `function.rb` in the `aws/lambdas/cruddur-upload-avatar` folder. 
 function.rb
 ```sh 
 #use for debugging
@@ -2152,14 +2155,485 @@ bundle install
 - Execute `functin.rb` using the command:
 ```sh
 bundle exec ruby function.rb
-
-Output
-{}
-{:statusCode=>200, :body=>"{\"url\":\"https://bennieo-uploaded-avatars.s3.amazonaws.com/mock.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA5JY273DFV43LV5DQ%2F20230624%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20230624T015501Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=2c4aff149ae88136ea32ea497594c5bf5feeb703bdc87c02df8637cbb82b671b\"}"}
 ```
 - Upload Star trek lore in the `aws/lambdas/cruddue-upload-avatar` folder.
 
-- The url generated above is then copied and paste into the thunder client. To test if the upload will work, uploaded an image Lore from star trek, clicked on the the body and then binar and choose the image which then uploads the image and instead of Get it is changed to Put on the Url part and then click on send and if everything is ok and it works it will return a 200 we can then go to our s3 bucket in AWS and confirm it was sent.
+- The url generated above is then copied and paste into the thunder client. To test if the upload will work, uploaded an image Lore from star trek, clicked on the the body and then binary and chose the image which then uploads the image and instead of `Get` it is changed to `Put` on the Url part and then click on send and if everything is ok and it works it will return a 200 we can then go to our s3 bucket in AWS and confirm it was sent.
+- Then created a new file `s3-upload-avatar-presigned-url-policy.json` in the folder `aws/policies` and attach the following code for permission for the presigned url:
+```sh
+{
+  "Version": "2012-10-17",
+  "Statement": [
+      {
+          "Sid": "VisualEditor0",
+          "Effect": "Allow",
+          "Action": "s3:PutObject",
+          "Resource": "arn:aws:s3:::johnbuen-uploaded-avatars/*"
+      }
+  ]
+}
+```
+
+In order to render the `"Access-Control-Allow-Origin": frontend_url` without hardcoding the `frontend_url`, did the following:
+- Created a new script file and folder  `parameters` and `ssm`in the `./bin/ssm/parameters` folder with the following content:
+```sh
+#! /usr/bin/bash
+
+export URL="https://3000-${GITPOD_WORKSPACE_ID}.${GITPOD_WORKSPACE_CLUSTER_HOST}"
+aws ssm put-parameter --type "SecureString" --name "/cruddur/CruddurAvatarUpload/LAMBDA_FRONTEND" --value $URL --overwrite
+```
+- This creates an `SSM Parameter` in the AWS Systems Manager.
+- Then also created and attached this policy to retrieve the ssm. Then copied and pasted the policy in the new file `cruddur-ssm-parameter`in the `aws/policies` folder.
+```sh
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameters",
+                "ssm:GetParameter"
+            ],
+            "Resource": "arn:aws:ssm:eu-west-2:ADDYOURACCOUNTNUMBERHERE:parameter/cruddur/CruddurAvatarUpload/LAMBDA_FRONTEND"
+        }
+    ]
+}
+```
+
+Next created a new script file `ruby-jwt` in the `/bin/lambda-layers` folder which generates the jwt token and passes it to the aws lambda layer with the following code:
+```sh
+#! /usr/bin/bash
+
+gem i jwt -Ni /tmp/lambda-layers/ruby-jwt/ruby/gems/2.7.1
+cd  /tmp/lambda-layers/ruby-jwt
+zip -r lambda-layers . -x ".*" -x "*/.*"
+zipinfo -t lambda-layers
+
+aws lambda publish-layer-version \
+  --layer-name jwt \
+  --description "Lambda Layer for JWT" \
+  --license-info "MIT" \
+  --zip-file fileb://lambda-layers.zip \
+  --compatible-runtimes ruby3.2
+```
+
+#### Create Lambda Authorizer
+
+The next step is to create the `CruddurApiGatewayLambdaAuthorizer` Lambda function in AWS Lambda for the ApiGatway that will trigger the `CruddurAvatarUpload`.
+
+Created a new file and folder `index.js` and `lambda-authorizer` in the `aws/lambdas` folder.
+```sh
+"use strict";
+const { CognitoJwtVerifier } = require("aws-jwt-verify");
+//const { assertStringEquals } = require("aws-jwt-verify/assert");
+
+const jwtVerifier = CognitoJwtVerifier.create({
+  userPoolId: process.env.USER_POOL_ID,
+  tokenUse: "access",
+  clientId: process.env.CLIENT_ID//,
+  //customJwtCheck: ({ payload }) => {
+  //  assertStringEquals("e-mail", payload["email"], process.env.USER_EMAIL);
+  //},
+});
+
+exports.handler = async (event) => {
+  console.log("request:", JSON.stringify(event, undefined, 2));
+
+  const token = JSON.stringify(event.headers["authorization"]).split(" ")[1].replace(/['"]+/g, '');
+  try {
+    const payload = await jwtVerifier.verify(token);
+    console.log("Access allowed. JWT payload:", payload);
+  } catch (err) {
+    console.error("Access forbidden:", err);
+    return {
+      isAuthorized: false,
+    };
+  }
+  return {
+    isAuthorized: true,
+  };
+};
+```
+In the `aws/lambda/lambda-authorizer` folder ran the following command;
+```sh
+npm install aws-jwt-verify --save
+```
+
+Once installed, created a zip file containing all the files of the `lambda-authorizer` by using the following code:
+```sh
+zip -r lambda-authorizer.zip .
+```
+
+At AWS Lambda, created the corresponding two functions:
+
+`CruddurAvatarUpload`
+
+- Code source as seen in `aws/lambdas/cruddur-upload-avatar/function.rb` above.
+- Renamed Handler as function.handler.
+- Added environment variable UPLOADS_BUCKET_NAME
+- Created a new policy PresignedUrlAvatarPolicy as seen in `aws/policies/s3-upload-avatar-presigned-url-policy.json` above, and then attached this policy to the role of this Lambda.
+- Added the layer from the `/bin/lambda-layers/rubt-jwt` code above to the lambda function under the section layers, click Add a layer.
+
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/191beb92-569b-45ea-b7b2-dcdf4f1fc04f)
+
+  
+`CruddurApiGatewayLambdaAuthorizer`
+
+- Uploaded the lambda_authorizer.zip into the code source
+- Added environment variables USER_POOL_ID and CLIENT_ID.
+
+Created at AWS API Gateway, api.<domain_name> and create two routes:
+
+`POST /avatars/key_upload` with authorizer `CruddurJWTAuthorizer` which invoke Lambda `CruddurApiGatewayLambdaAuthorizer`, and with integration `CruddurAvatarUpload`.
+`OPTIONS /{prefix+}` with the authorizer, and with integration CruddurAvatarUpload.
+
+Next, updated the following files:
+
+ProfileForm.js
+```sh
+import './ProfileForm.css';
+import React from "react";
+import process from 'process';
+import {getAccessToken} from 'lib/CheckAuth';
+
+export default function ProfileForm(props) {
+  const [bio, setBio] = React.useState('');
+  const [displayName, setDisplayName] = React.useState('');
+
+  React.useEffect(()=>{
+    setBio(props.profile.bio || '');
+    setDisplayName(props.profile.display_name);
+  }, [props.profile])
+
+  const s3uploadkey = async (extension)=> {
+    console.log('external',extension)
+    try {
+      const api_gateway = `${process.env.REACT_APP_API_GATEWAY_ENDPOINT_URL}/avatars/key_upload`
+      await getAccessToken()
+      const access_token = localStorage.getItem("access_token")
+      const json = {
+          extension: extension
+      }
+      const res = await fetch(api_gateway, {
+        method: "POST",
+        body: JSON.stringify(json),
+        headers: {
+          'Origin': process.env.REACT_APP_FRONTEND_URL,
+          'Authorization': `Bearer ${access_token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+      }})
+      let data = await res.json();
+      if (res.status === 200) {
+        return data.url
+      } else {
+        console.log(res)
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  const s3upload = async (event) => {
+    console.log('event',event)
+    const file = event.target.files[0]
+    console.log('file',file)
+    const filename = file.name
+    const size = file.size
+    const type = file.type
+    const preview_image_url = URL.createObjectURL(file)
+    console.log(filename, size, type)
+    //const formData = new FormData();
+    //formData.append('file', file);
+    const fileparts = filename.split('.')
+    const extension = fileparts[fileparts.length-1]
+    const presignedurl = await s3uploadkey(extension)
+    try {
+      console.log('s3upload')
+      const res = await fetch(presignedurl, {
+        method: "PUT",
+        body: file,
+        headers: {
+          'Content-Type': type
+        }})
+   
+      //let data = await res.json();
+      if (res.status === 200) {
+        //setPresignedurl(data.url)
+      } else {
+        console.log(res)
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  const onsubmit = async (event) => {
+    event.preventDefault();
+    try {
+      const backend_url = `${process.env.REACT_APP_BACKEND_URL}/api/profile/update`
+      await getAccessToken()
+      const access_token = localStorage.getItem("access_token")
+      const res = await fetch(backend_url, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bio: bio,
+          display_name: displayName
+        }),
+      });
+      let data = await res.json();
+      if (res.status === 200) {
+        setBio(null)
+        setDisplayName(null)
+        props.setPopped(false)
+      } else {
+        console.log(res)
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  const bio_onchange = (event) => {
+    setBio(event.target.value);
+  }
+
+  const display_name_onchange = (event) => {
+    setDisplayName(event.target.value);
+  }
+
+  const close = (event)=> {
+    if (event.target.classList.contains("profile_popup")) {
+      props.setPopped(false)
+    }
+  }
+
+  if (props.popped === true) {
+    return (
+      <div className="popup_form_wrap profile_popup" onClick={close}>
+        <form 
+          className='profile_form popup_form'
+          onSubmit={onsubmit}
+        >
+          <div className="popup_heading">
+            <div className="popup_title">Edit Profile</div>
+            <div className='submit'>
+              <button type='submit'>Save</button>
+            </div>
+          </div>
+          <div className="popup_content">
+          <input type="file" name="avatarupload" onChange={s3upload} />
+            <div className="field display_name">
+              <label>Display Name</label>
+              <input
+                type="text"
+                placeholder="Display Name"
+                value={displayName}
+                onChange={display_name_onchange} 
+              />
+            </div>
+            <div className="field bio">
+              <label>Bio</label>
+              <textarea
+                placeholder="Bio"
+                value={bio}
+                onChange={bio_onchange} 
+              />
+            </div>
+          </div>
+        </form>
+      </div>
+    );
+  }
+}
+```
+
+Added the following code to the `ProfileForm.css`
+```sh
+.profile_popup .upload {
+  color: white;
+  background: rgba(149,0,255,1);
+}
+```
+
+Added to the `frontend-react-js.env.erb`:
+```sh
+REACT_APP_FRONTEND_URL=https://3000-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>
+REACT_APP_API_GATEWAY_ENDPOINT_URL=<%= ENV['API_GATEWAY_ENDPOINT_URL'] %>
+```
+At AWS S3, updated the permissions of bennieo-uploaded-avatars by editing the CORS configuration section and adding the following code which helps to resolve the Cors issue:
+```sh
+[
+    {
+        "AllowedHeaders": [
+            "*"
+        ],
+        "AllowedMethods": [
+            "PUT"
+        ],
+        "AllowedOrigins": [
+            "https://*.gitpod.io"
+        ],
+        "ExposeHeaders": [
+            "x-amz-server-side-encryption",
+            "x-amz-request-id",
+            "x-amz-id-2"
+        ],
+        "MaxAgeSeconds": 3000
+    }
+]
+```
+Then created a new file `cors.json` and folder `s3`in the `aws/s3` folder and pasted the above code into it. 
+
+## Rendering Avatar using Cloudfront
+
+Created 2 new files `ProfileAvatar.js` and `ProfileAvatar.css` in the `frontend-react-js/src/components` folder.
+
+Added the following content for the `ProfileAvatar.js`.
+```sh
+import './ProfileAvatar.css';
+
+export default function ProfileAvatar(props) {
+    const backgroundImage = `url("https://assets.johnbuen.co.uk/avatars/${props.id}.jpg"`;
+
+    const styles = {
+      backgroundImage: backgroundImage,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    };
+
+  return (
+    <div 
+      className="profile-avatar"
+      style={styles}
+    ></div>
+  );
+}
+```
+Then updated the following files in the  `frontend-react-js/src/components` with the following codes:
+
+ProfileHeading.js 
+Replaced
+```sh
+ <div className="avatar">
+        <img src="https://assets.cruddur.com/avatars/data.jpg"></img>
+      </div>
+```
+
+With and added the import statement
+```sh
+import ProfileAvatar from 'components/ProfileAvatar'
+
+ <ProfileAvatar id={props.profile.cognito_user_uuid} />
+```
+
+ProfileHeading.css
+Replaced
+```sh
+profile_heading .avatar {
+  position: absolute;
+  bottom:-74px;
+  left: 16px;
+}
+.profile_heading .avatar img {
+  width: 148px;
+  height: 148px;
+  border-radius: 999px;
+```
+With 
+```sh
+.profile_heading .profile-avatar {
+  position: absolute;
+  bottom:-74px;
+  left: 16px;
+}
+```
+
+ProfileInfo.js
+Replaced 
+```sh
+      <div className="profile-info" onClick={click_pop}>
+      <div className="profile-avatar"></div>
+```
+With and added impot statement
+```sh
+import ProfileAvatar from 'components/ProfileAvatar'
+
+<div className="profile-info" onClick={click_pop}>
+<ProfileAvatar id={props.user.cognito_user_uuid} />
+```
+
+In the `frontend-react-js/src/lib/` folder
+CheckAuth
+Replaced
+```sh
+ .then((cognito_user) => {
+    setUser({
+      display_name: cognito_user.attributes.name,
+      handle: cognito_user.attributes.preferred_username
+    })
+```
+With
+```sh
+ .then((cognito_user) => {
+    setUser({
+      cognito_user_uuid: cognito_user.attributes.sub,
+      display_name: cognito_user.attributes.name,
+      handle: cognito_user.attributes.preferred_username
+    })
+```
+
+In 
+UserFeedPage.js
+Replaced
+```sh
+let resJson = await res.json();
+      if (res.status === 200) {
+        setProfile(resJson.profile)
+        setActivities(resJson.activities)
+      } else {
+```
+With
+```sh
+let resJson = await res.json();
+      if (res.status === 200) {
+        console.log('setprofile',resJson.profile)
+        setProfile(resJson.profile)
+        setActivities(resJson.activities)
+      } else {
+```
+
+In the `backendflask/db/sl/users` folder
+Show.sql
+Replaced
+```sh
+(SELECT COALESCE(row_to_json(object_row),'{}'::json) FROM (
+    SELECT
+      users.uuid,
+      users.handle,
+      users.display_name,
+      users.bio,
+```
+With
+```sh
+(SELECT COALESCE(row_to_json(object_row),'{}'::json) FROM (
+    SELECT
+      users.uuid,
+      users.cognito_user_id as cognito_user_uuid,
+      users.handle,
+      users.display_name,
+      users.bio,
+```
+
+
+
 
 
 
