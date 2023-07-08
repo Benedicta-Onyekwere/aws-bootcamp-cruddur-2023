@@ -2632,6 +2632,9 @@ With
       users.bio,
 ```
 
+Rendered Avatar
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/288d9370-a995-4b45-ad3a-1a6768b453d8)
 
 
 
