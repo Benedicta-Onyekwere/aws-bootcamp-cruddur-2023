@@ -158,7 +158,7 @@ THUMBING_TOPIC_NAME="cruddur-assets"
 THUMBING_FUNCTION_PATH="/workspace/aws-bootcamp-cruddur-2023/aws/lambdas/process-images"
 ```
 
-It is a good practice to create a folder for the lambda codes for each project so it is to refer to which project belongs the code.
+It is a good practice to create a folder for the lambda codes for each project so it is used to refer to which project the code belongs.
 Copied the .env.example file into the ".env" in order to load the env vars and this will be necessery for thumbing-serverless-cdk-stack file.
 ```sh
 cp .env.example .env
@@ -790,7 +790,7 @@ Next is to deploy the CDK project using the following code. Then to see what has
 cdk deploy
 ```
 
-If you rename a bucket and deploy the entire stack, this wont affect the changes, you need to destroy the entire stack and relaunch using the following command:
+If a bucket is renamed and then re-deploy the entire stack, this wont affect the changes, you need to destroy the entire stack and relaunch using the following command:
 ```sh
 cdk destroy
 ```
@@ -802,7 +802,7 @@ rm -rf node_modules/sharp
 SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install --arch=x64 --platform=linux --libc=glibc sharp
 ```
 
-Using this same code, a new folder `severless` and script file `build` was created in the `bin/serverless` directory.
+Using this same code, a new folder `severless` and script file `build` was created in the `./bin/serverless` directory.
 ```sh
 #! /usr/bin/bash
 
@@ -1153,7 +1153,7 @@ To configure the bucket policy because it is a requirement that will grant the b
 
 ## Implementation of User Profile Page
 
-A new script file `bootstrap` is created in the bin directory with the following content:
+A new script file `bootstrap` is created in the `bin` directory with the following content:
 ```sh
 #! /usr/bin/bash
 set -e
@@ -1205,8 +1205,10 @@ FROM public.users
 WHERE
   users.handle = %(handle)s
 ```
+
 The `users_activities.py` file in the backend-flask/services folder, was updated with the following:
-This code was changed 
+
+This code was changed;
 ```sh
   now = datetime.now(timezone.utc).astimezone()
       
@@ -1223,6 +1225,7 @@ This code was changed
         }]
         model['data'] = results
 ```
+
 With
 ```sh
       if user_handle == None or len(user_handle) < 1:
@@ -1317,6 +1320,7 @@ export default function ActivityFeed(props) {
     </article>
   );
  ```
+
 Same refactoring is also done for `NotificationsFeedPage.js` in the same folder with:
 ```sh
 return (
@@ -1352,6 +1356,7 @@ return (
   );
 }
 ```
+
 Created new files `ProfileHeading.js` and `ProfileHeading.css` also in the `frontend-react-js/src/components` folder.
 ProfileHeading.js
 ```sh
@@ -1821,6 +1826,7 @@ Created a new folder `migrations` in the `backend-flask/db`. This is where the o
 ```sh
 ./bin/generate/migration add_bio_column
 ```
+
 This script generated a file `1687055262088531_add_bio_column.py` in the `backend-flask/migrations` folder which is then updated with SQL commands .
 ```sh
 from lib.db import db
@@ -1982,7 +1988,8 @@ ON CONFLICT (id) DO NOTHING;
 ```
 
 Also the `db.py` file is updated with the following lines of code at the commit, array_json, object_json and value with verbose respectively;
-That is from
+
+That is from;
 ```sh
 def query_commit(self,sql,params={}):
 self.print_sql('commit with returning',sql,params)
@@ -2168,7 +2175,7 @@ bundle exec ruby function.rb
           "Sid": "VisualEditor0",
           "Effect": "Allow",
           "Action": "s3:PutObject",
-          "Resource": "arn:aws:s3:::johnbuen-uploaded-avatars/*"
+          "Resource": "arn:aws:s3:::bennieo-uploaded-avatars/*"
       }
   ]
 }
@@ -2255,6 +2262,7 @@ exports.handler = async (event) => {
   };
 };
 ```
+
 In the `aws/lambda/lambda-authorizer` folder ran the following command;
 ```sh
 npm install aws-jwt-verify --save
@@ -2468,6 +2476,7 @@ Added to the `frontend-react-js.env.erb`:
 REACT_APP_FRONTEND_URL=https://3000-<%= ENV['GITPOD_WORKSPACE_ID'] %>.<%= ENV['GITPOD_WORKSPACE_CLUSTER_HOST'] %>
 REACT_APP_API_GATEWAY_ENDPOINT_URL=<%= ENV['API_GATEWAY_ENDPOINT_URL'] %>
 ```
+
 At AWS S3, updated the permissions of bennieo-uploaded-avatars by editing the CORS configuration section and adding the following code which helps to resolve the Cors issue:
 ```sh
 [
@@ -2490,6 +2499,7 @@ At AWS S3, updated the permissions of bennieo-uploaded-avatars by editing the CO
     }
 ]
 ```
+
 Then created a new file `cors.json` and folder `s3`in the `aws/s3` folder and pasted the above code into it. 
 
 ## Rendering Avatar using Cloudfront
@@ -2517,9 +2527,11 @@ export default function ProfileAvatar(props) {
   );
 }
 ```
+
 Then updated the following files in the  `frontend-react-js/src/components` with the following codes:
 
 ProfileHeading.js 
+
 Replaced
 ```sh
  <div className="avatar">
@@ -2535,6 +2547,7 @@ import ProfileAvatar from 'components/ProfileAvatar'
 ```
 
 ProfileHeading.css
+
 Replaced
 ```sh
 profile_heading .avatar {
@@ -2547,6 +2560,7 @@ profile_heading .avatar {
   height: 148px;
   border-radius: 999px;
 ```
+
 With 
 ```sh
 .profile_heading .profile-avatar {
@@ -2557,11 +2571,13 @@ With
 ```
 
 ProfileInfo.js
+
 Replaced 
 ```sh
       <div className="profile-info" onClick={click_pop}>
       <div className="profile-avatar"></div>
 ```
+
 With and added impot statement
 ```sh
 import ProfileAvatar from 'components/ProfileAvatar'
@@ -2572,6 +2588,7 @@ import ProfileAvatar from 'components/ProfileAvatar'
 
 In the `frontend-react-js/src/lib/` folder
 CheckAuth
+
 Replaced
 ```sh
  .then((cognito_user) => {
@@ -2580,6 +2597,7 @@ Replaced
       handle: cognito_user.attributes.preferred_username
     })
 ```
+
 With
 ```sh
  .then((cognito_user) => {
@@ -2592,6 +2610,7 @@ With
 
 In 
 UserFeedPage.js
+
 Replaced
 ```sh
 let resJson = await res.json();
@@ -2600,6 +2619,7 @@ let resJson = await res.json();
         setActivities(resJson.activities)
       } else {
 ```
+
 With
 ```sh
 let resJson = await res.json();
@@ -2612,6 +2632,7 @@ let resJson = await res.json();
 
 In the `backendflask/db/sl/users` folder
 Show.sql
+
 Replaced
 ```sh
 (SELECT COALESCE(row_to_json(object_row),'{}'::json) FROM (
@@ -2621,6 +2642,7 @@ Replaced
       users.display_name,
       users.bio,
 ```
+
 With
 ```sh
 (SELECT COALESCE(row_to_json(object_row),'{}'::json) FROM (
