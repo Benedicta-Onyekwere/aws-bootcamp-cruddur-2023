@@ -1,4 +1,4 @@
-FROM ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/cruddur-python:3.10-slim-buster
+FROM 914347776203.dkr.ecr.us-east-1.amazonaws.com/cruddur-python:3.10-slim-buster
 
 # Set a non-root user for security reasons
 RUN adduser --disabled-password --gecos '' myuser
