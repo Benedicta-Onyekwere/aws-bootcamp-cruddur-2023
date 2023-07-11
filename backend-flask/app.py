@@ -4,6 +4,7 @@ from flask_cors import CORS, cross_origin
 import os
 import sys
 from services.users_short import *
+from services.healthcheck_activities import *
 from services.home_activities import *
 from services.notifications_activities import *
 from services.user_activities import *
@@ -106,7 +107,7 @@ cors = CORS(
 #     got_request_exception.connect(rollbar.contrib.flask.report_exception, app)
 @app.route('/api/health-check')
 def health_check():
-  return {'success': True}, 200
+  return {'success': True, 'ver':1 }, 200
 #@app.route('/rollbar/test')
 #def rollbar_test():
 #    rollbar.report_message('Hello World!', 'warning')
