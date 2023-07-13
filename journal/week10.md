@@ -1,6 +1,7 @@
 # Week 10 — CloudFormation Part 1
 
 This week we will be working with CloudFormation
+
 [Creating CloudFormation Template](#creating-cloud-formation-template)
 [CFN Network Template](#cfn-network-template)
 
