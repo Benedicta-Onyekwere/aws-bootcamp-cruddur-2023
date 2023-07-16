@@ -676,6 +676,7 @@ Resources:
           !Sub ${NetworkingStack}VpcId
 # Outputs:
 ```
+To proceed with NetworkDeploy and ClusterDeploy, remove obsolete resources, including CFN cruddur, ECS cluster, Namespace (via CloudMap), and ALB (Loadbalancer and Target Groups).
 
 ## Implement CFN TOML
 TOML (Tom's Obvious, Minimal Language) is a file format used for configuration files. In order to pass the env vars inside a Cloud Formation template, we used cfn-toml. This was used to pass the `CertificationArn ` value in the `template.yaml` file in `aws/cfn/cluster` folder which was needed in order for the cluster to be deployed and following best practice instead of hardcoding it, CFN toml is used instead. 
