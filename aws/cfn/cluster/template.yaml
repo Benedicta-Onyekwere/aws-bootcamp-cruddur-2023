@@ -158,7 +158,7 @@ Resources:
         - Field: host-header
           HostHeaderConfig: 
             Values: 
-              - api.cruddur.com
+              - api.bennieo.me
       Actions: 
         - Type: forward
           TargetGroupArn:  !Ref BackendTG
