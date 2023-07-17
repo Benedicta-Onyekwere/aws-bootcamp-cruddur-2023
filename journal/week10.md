@@ -183,9 +183,10 @@ cfn-guard validate -r ecs-cluster.guard
 ## Implement CFN Networking Layer
 Started by first deleting the initial cluster created in the AWS console.
 
-Created a new file `template.yaml` and folder `networking` in the `aws/cfn` directory. This file will contain the structure of our network layer such as VPC, Internet Gateway, Route tables and 6 Public/Private Subnets, Availability zones etc.
+Create a new file `template.yaml` and folder `networking` in the `aws/cfn` directory. This file will contain the structure of our network layer such as VPC, Internet Gateway, Route tables and 6 Public/Private Subnets, Availability zones etc.
 ```sh
 AWSTemplateFormatVersion: 2010-09-09
+
 Description: |
   The base networking components for our stack:
   - VPC
@@ -440,7 +441,7 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
-Created a new file `template.yaml` and folder `cluster` in the `aws/cfn` directory. This file will contain the structure of our containers such as the frontend and the backend container, target groups, application load balancer.
+Create a new file `template.yaml` and folder `cluster` in the `aws/cfn` directory. This file will contain the structure of our containers such as the frontend and the backend container, target groups, application load balancer.
 ```sh
 AWSTemplateFormatVersion: 2010-09-09
 
@@ -450,6 +451,7 @@ Description: |
   - Application Load Balanacer (ALB)
     - ipv4 only
     - internet facing
+    - certificate attached from Amazon Certification Manager (ACM)
   - ALB Security Group
   - HTTPS Listerner
     - send naked domain to frontend Target Group
@@ -543,12 +545,12 @@ Resources:
       # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-elasticloadbalancingv2-loadbalancer-loadbalancerattributes.html
       Scheme: internet-facing
       SecurityGroups:
-        - !Ref ALBSG
+        - !GetAtt ALBSG.GroupId
       Subnets:
         Fn::Split:
           - ","
           - Fn::ImportValue:
-              !Sub "${NetworkingStack}SubnetIds"
+              !Sub "${NetworkingStack}PublicSubnetIds"
       LoadBalancerAttributes:
         - Key: routing.http2.enabled
           Value: true
@@ -601,7 +603,7 @@ Resources:
         - Field: host-header
           HostHeaderConfig: 
             Values: 
-              - api.cruddur.com
+              - api.DOMAIN NAME
       Actions: 
         - Type: forward
           TargetGroupArn:  !Ref BackendTG
@@ -613,6 +615,9 @@ Resources:
     Properties:
       GroupName: !Sub "${AWS::StackName}AlbSG"
       GroupDescription: Public Facing SG for our Cruddur ALB
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkingStack}VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
@@ -624,11 +629,27 @@ Resources:
           ToPort: 80
           CidrIp: '0.0.0.0/0'
           Description: INTERNET HTTP
+  # We have to create this SG before the service so we can pass it to database SG
+  ServiceSG:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group.html
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}ServSG"
+      GroupDescription: Security for Fargate Services for Cruddur
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkingStack}VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          SourceSecurityGroupId: !GetAtt ALBSG.GroupId
+          FromPort: !Ref BackendPort
+          ToPort: !Ref BackendPort
+          Description: ALB HTTP
   BackendTG:
     # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-elasticloadbalancingv2-targetgroup.html
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${AWS::StackName}BackendTG"
+      #Name: !Sub "${AWS::StackName}BackendTG"
       Port: !Ref BackendPort
       HealthCheckEnabled: true
       HealthCheckProtocol: !Ref BackendHealthCheckProtocol
@@ -643,17 +664,21 @@ Resources:
         HttpCode: 200
       Protocol: HTTP
       ProtocolVersion: HTTP2
+      TargetType: ip
       TargetGroupAttributes: 
         - Key: deregistration_delay.timeout_seconds
           Value: 0
       VpcId:
         Fn::ImportValue:
           !Sub ${NetworkingStack}VpcId
+      Tags:
+        - Key: target-group-name
+          Value: backend
   FrontendTG:
     # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-elasticloadbalancingv2-targetgroup.html
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${AWS::StackName}FrontendTG"
+      #Name: !Sub "${AWS::StackName}FrontendTG"
       Port: !Ref FrontendPort
       HealthCheckEnabled: true
       HealthCheckProtocol: !Ref FrontendHealthCheckProtocol
@@ -668,13 +693,37 @@ Resources:
         HttpCode: 200
       Protocol: HTTP
       ProtocolVersion: HTTP2
+      TargetType: ip
       TargetGroupAttributes: 
         - Key: deregistration_delay.timeout_seconds
           Value: 0
       VpcId:
         Fn::ImportValue:
           !Sub ${NetworkingStack}VpcId
-# Outputs:
+      Tags:
+        - Key: target-group-name
+          Value: frontend
+Outputs:
+  ClusterName:
+    Value: !Ref FargateCluster
+    Export:
+      Name: !Sub "${AWS::StackName}ClusterName"
+  ServiceSecurityGroupId:
+    Value: !GetAtt ServiceSG.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}ServiceSecurityGroupId"
+  ALBSecurityGroupId:
+    Value: !GetAtt ALBSG.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}ALBSecurityGroupId"
+  FrontendTGArn:
+    Value: !Ref FrontendTG
+    Export:
+      Name: !Sub "${AWS::StackName}FrontendTGArn"
+  BackendTGArn:
+    Value: !Ref BackendTG
+    Export:
+      Name: !Sub "${AWS::StackName}BackendTGArn"
 ```
 To proceed with NetworkDeploy and ClusterDeploy, remove obsolete resources, including CFN cruddur, ECS cluster, Namespace (via CloudMap), and ALB (Loadbalancer and Target Groups).
 
@@ -696,7 +745,7 @@ tasks:
       gem install cfn-toml
 ```
 
-Created a new file `config.toml` and `config-toml-example` in the `aws/cfn/cluster` directoy.
+Create a new file `config.toml` and `config-toml-example` in the `aws/cfn/cluster` directoy.
 ```sh
 [deploy]
 bucket = 'cfn-artifacts-${RANDOM_STRING}'
@@ -784,7 +833,7 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
-Created a new files `config.toml` and `config-toml-example` in the `aws/cfn/networking` directory.
+Create new files `config.toml` and `config-toml-example` in the `aws/cfn/networking` directory.
 ```sh
 [deploy]
 bucket = 'cfn-artifacts-${RANDOM_STRING}'
@@ -798,5 +847,487 @@ bucket = ''
 region = ''
 stack_name = ''
 ```
+
+## Implement CFN Service Layer for Backend
+Create a new file `config.toml` in the `aws/cfn/service` directory.
+```sh
+[deploy]
+bucket = 'cfn-artifacts-${RANDOM_STRING}'
+region = '${AWS_DEFAULT_REGION}'
+stack_name = 'CrdSrvBackendFlask'
+```
+
+Created another file `template.yaml` in the `aws/cfn/service` directory.
+```sh
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  Task Definition
+  Fargate Service
+  Execution Role
+  Task Role
+
+Parameters:
+  NetworkingStack:
+    Type: String
+    Description: This is our base layer of networking components eg. VPC, Subnets
+    Default: CrdNet
+  ClusterStack:
+    Type: String
+    Description: This is our cluster layer eg. ECS Cluster, ALB
+    Default: CrdCluster
+  ContainerPort:
+    Type: Number
+    Default: 4567
+  ServiceCpu:
+    Type: String
+    Default: '256'
+  ServiceMemory:
+    Type: String
+    Default: '512'
+  ServiceName:
+    Type: String
+    Default: backend-flask
+  ContainerName:
+    Type: String
+    Default: backend-flask
+  TaskFamily:
+    Type: String
+    Default: backend-flask
+  EcrImage:
+    Type: String
+    Default: 'AWS_ACCOUNT_ID.dkr.ecr.AWS_DEFAULT_REGION.amazonaws.com/backend-flask'
+  EnvOtelServiceName:
+    Type: String
+    Default: backend-flask
+  EnvOtelExporterOtlpEndpoint:
+    Type: String
+    Default: https://api.honeycomb.io
+  EnvAWSCognitoUserPoolId:
+    Type: String
+    Default: us-east-1_nCzleL11X
+  EnvCognitoUserPoolClientId:
+    Type: String
+    Default: 6rvluth75jaeg605hblpdhqmbq
+  EnvFrontendUrl:
+    Type: String
+    Default: "*"
+  EnvBackendUrl:
+    Type: String
+    Default: "*"
+  SecretsAWSAccessKeyId:
+    Type: String
+    Default: 'arn:aws:ssm:AWS_DEFAULT_REGION:AWS_ACCOUNT_ID:parameter/cruddur/backend-flask/AWS_ACCESS_KEY_ID'
+  SecretsSecretAccessKey:
+    Type: String
+    Default: 'arn:aws:ssm:AWS_DEFAULT_REGION:AWS_ACCOUNT_ID:parameter/cruddur/backend-flask/AWS_SECRET_ACCESS_KEY'
+  SecretsConnectionUrl:
+    Type: String
+    Default: 'arn:aws:ssm:AWS_DEFAULT_REGION:AWS_ACCOUNT_ID:parameter/cruddur/backend-flask/CONNECTION_URL'
+  SecretsRollbarAccessToken:
+    Type: String
+    Default: 'arn:aws:ssm:AWS_DEFAULT_REGION:AWS_ACCOUNT_ID:parameter/cruddur/backend-flask/ROLLBAR_ACCESS_TOKEN'
+  SecretsOtelExporterOltpHeaders:
+    Type: String
+    Default: 'arn:aws:ssm:AWS_DEFAULT_REGION:AWS_ACCOUNT_ID:parameter/cruddur/backend-flask/OTEL_EXPORTER_OTLP_HEADERS'
+  
+Resources:
+  FargateService:
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-service.html
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster:
+        Fn::ImportValue:
+          !Sub "${ClusterStack}ClusterName"
+      DeploymentController:
+        Type: ECS
+      DesiredCount: 1
+      EnableECSManagedTags: true
+      EnableExecuteCommand: true
+      HealthCheckGracePeriodSeconds: 0
+      LaunchType: FARGATE
+      LoadBalancers:
+        - TargetGroupArn:
+            Fn::ImportValue:
+              !Sub "${ClusterStack}BackendTGArn"
+          ContainerName: 'backend-flask'
+          ContainerPort: !Ref ContainerPort
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - Fn::ImportValue:
+                !Sub "${ClusterStack}ServiceSecurityGroupId"
+          Subnets:
+            Fn::Split:
+              - ","
+              - Fn::ImportValue:
+                  !Sub "${NetworkingStack}PublicSubnetIds"
+      PlatformVersion: LATEST
+      PropagateTags: SERVICE
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: "cruddur"
+        # TODO - If you want to log
+        # LogConfiguration
+        Services:
+          - DiscoveryName: backend-flask
+            PortName: backend-flask
+            ClientAliases:
+              - Port: !Ref ContainerPort
+      #ServiceRegistries:
+      #  - RegistryArn: !Sub 'arn:aws:servicediscovery:${AWS::Region}:${AWS::AccountId}:service/srv-cruddur-backend-flask'
+      #    Port: !Ref ContainerPort
+      #    ContainerName: 'backend-flask'
+      #    ContainerPort: !Ref ContainerPort
+      ServiceName: !Ref ServiceName
+      TaskDefinition: !Ref TaskDefinition
+
+  TaskDefinition:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Ref TaskFamily
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      NetworkMode: 'awsvpc'
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      RequiresCompatibilities:
+        - 'FARGATE'
+      ContainerDefinitions:
+        - Name: 'xray'
+          Image: 'public.ecr.aws/xray/aws-xray-daemon'
+          Essential: true
+          User: '1337'
+          PortMappings:
+            - Name: 'xray'
+              ContainerPort: 2000
+              Protocol: 'udp'
+        - Name: 'backend-flask'
+          Image: !Ref EcrImage 
+          Essential: true
+          HealthCheck:
+            Command:
+              - 'CMD-SHELL'
+              - 'python /backend-flask/bin/health-check'
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          PortMappings:
+            - Name: !Ref ContainerName
+              ContainerPort: !Ref ContainerPort
+              Protocol: 'tcp'
+              AppProtocol: 'http'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: 'cruddur'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: !Ref ServiceName
+          Environment:
+            - Name: 'OTEL_SERVICE_NAME'
+              Value: !Ref EnvOtelServiceName
+            - Name: 'OTEL_EXPORTER_OTLP_ENDPOINT'
+              Value: !Ref EnvOtelExporterOtlpEndpoint
+            - Name: 'AWS_COGNITO_USER_POOL_ID'
+              Value: !Ref EnvAWSCognitoUserPoolId
+            - Name: 'AWS_COGNITO_USER_POOL_CLIENT_ID'
+              Value: !Ref EnvCognitoUserPoolClientId
+            - Name: 'FRONTEND_URL'
+              Value: !Ref EnvFrontendUrl
+            - Name: 'BACKEND_URL'
+              Value: !Ref EnvBackendUrl
+            - Name: 'AWS_DEFAULT_REGION'
+              Value: !Ref AWS::Region
+          Secrets:
+            - Name: 'AWS_ACCESS_KEY_ID'
+              ValueFrom: !Ref SecretsAWSAccessKeyId
+            - Name: 'AWS_SECRET_ACCESS_KEY'
+              ValueFrom: !Ref SecretsSecretAccessKey
+            - Name: 'CONNECTION_URL'
+              ValueFrom: !Ref SecretsConnectionUrl
+            - Name: 'ROLLBAR_ACCESS_TOKEN'
+              ValueFrom: !Ref SecretsRollbarAccessToken
+            - Name: 'OTEL_EXPORTER_OTLP_HEADERS'
+              ValueFrom: !Ref SecretsOtelExporterOltpHeaders
+  ExecutionRole:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CruddurServiceExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'ecs-tasks.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'cruddur-execution-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: 'VisualEditor0'
+                Effect: 'Allow'
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Sid: 'VisualEditor1'
+                Effect: 'Allow'
+                Action:
+                  - 'ssm:GetParameters'
+                  - 'ssm:GetParameter'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cruddur/${ServiceName}/*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+  TaskRole:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CruddurServiceTaskRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'ecs-tasks.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'cruddur-task-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: 'VisualEditor0'
+                Effect: 'Allow'
+                Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+#Outputs:
+#  ServiceSecurityGroupId:
+#    Value: !GetAtt  ServiceSG.GroupId
+#    Export:
+#      Name: !Sub "${AWS::StackName}ServiceSecurityGroupId"
+```
+Create a new bash script file `service-deploy` in the `bin/cfn` directory.
+```sh
+#! /usr/bin/env bash
+set -e # stop execution of the script if it fails
+
+#This script will pass the value of the main root
+export THEIA_WORKSPACE_ROOT=$(pwd)
+
+
+CFN_PATH="$THEIA_WORKSPACE_ROOT/aws/cfn/service/template.yaml"
+CONFIG_PATH="$THEIA_WORKSPACE_ROOT/aws/cfn/service/config.toml"
+echo $CONFIG_PATH
+
+cfn-lint $CFN_PATH
+
+BUCKET=$(cfn-toml key deploy.bucket -t $CONFIG_PATH)
+REGION=$(cfn-toml key deploy.region -t $CONFIG_PATH)
+STACK_NAME=$(cfn-toml key deploy.stack_name -t $CONFIG_PATH)
+#PARAMETERS=$(cfn-toml params v2 -t $CONFIG_PATH)
+
+
+
+aws cloudformation deploy \
+  --stack-name $STACK_NAME \
+  --template-file $CFN_PATH \
+  --s3-bucket $BUCKET \
+  --region $REGION \
+  --no-execute-changeset \
+  --tags group=cruddur-backend-flask \
+  --capabilities CAPABILITY_NAMED_IAM \
+  # --parameter-overrides $PARAMETERS \
+```
+Deploy Service Layer and before approving the changeset delete existing policies/roles in AWS listed below.
+
+- CruddurTaskRole
+- CruddurServiceExecutionRole
+
+## Implement CFN Database Layer (RDS)
+Create a new file `template.yaml` and folder `db` in the `aws/cfn` directory.
+```sh
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  Database in RDS Postgres component for the application
+  - RDS Instance
+  - Database Security Group
+  - DB Subnetgroup
+
+Parameters:
+  NetworkingStack:
+    Type: String
+    Description: This is the base layer of networking components
+    Default: CrdNet
+  ClusterStack:
+    Type: String
+    Description: This is the Cluster Layer 
+    Default: CrdCluster
+  BackupRetentionPeriod:
+    Type: Number
+    Default: 0
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+  DBInstanceIdentifier:
+    Type: String
+    Default: cruddur-instance
+  DBName:
+    Type: String
+    Default: cruddur
+  DeletionProtection:
+  #set this in on true for production
+    Type: String
+    AllowedValues:
+         - true
+         - false
+    Default: false
+  EngineVersion:
+    Type: String
+    #  DB Proxy only supports very specific versions of Postgres
+    #  https://stackoverflow.com/questions/63084648/which-rds-db-instances-are-supported-for-db-proxy
+    Default: '15.3'
+  MasterUsername:
+    Type: String
+
+  MasterUserPassword:
+    Type: String
+    NoEcho: true 
+
+Resources:
+  RDSPostgresSG:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group.html
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}RDSSG"
+      GroupDescription: Security Group RDS
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkingStack}VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          SourceSecurityGroupId:
+            Fn::ImportValue:
+              !Sub ${ClusterStack}ServiceSecurityGroupId
+          FromPort: 5432
+          ToPort: 5432
+          Description: Security Group Cluster
+  DBSubnetGroup:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbsubnetgroup.html
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub "${AWS::StackName}DBSubnetGroup"
+      DBSubnetGroupDescription: !Sub "${AWS::StackName}DBSubnetGroup"
+      SubnetIds: { 'Fn::Split' : [ ','  , { "Fn::ImportValue": { "Fn::Sub": "${NetworkingStack}PublicSubnetIds" }}] }
+  
+
+  Database:
+    #https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbinstance.html
+    Type: AWS::RDS::DBInstance
+    # Remember to change this back to snapshot for production
+    # cant use !Ref on DeletionPolicy and Condition Stacks
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html
+    #DeletionPolicy: 'Snapshot'
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatereplacepolicy.html
+    #UpdateReplacePolicy: 'Snapshot'
+    Properties:
+      AllocatedStorage: '20'
+      AllowMajorVersionUpgrade: true
+      AutoMinorVersionUpgrade: true
+      BackupRetentionPeriod: !Ref  BackupRetentionPeriod
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Ref DBInstanceIdentifier
+      DBName: !Ref DBName
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DeletionProtection: !Ref DeletionProtection
+      EnablePerformanceInsights: true
+      Engine: postgres
+      EngineVersion: !Ref EngineVersion
+
+
+# Must be 1 to 63 letters or numbers.
+# First character must be a letter.
+# Can't be a reserved word for the chosen database engine.
+      MasterUsername:  !Ref MasterUsername
+      # Constraints: Must contain from 8 to 128 characters.
+      MasterUserPassword: !Ref MasterUserPassword
+      PubliclyAccessible: true
+      VPCSecurityGroups:
+        - !GetAtt RDSPostgresSG.GroupId
+#Outputs:
+#  ServiceSecurityGroupId:
+#    Value: !GetAtt ServiceSG.GroupId
+#    Export:
+#      Name: !Sub "${AWS::StackName}ServiceSecurityGroupId"
+```
+
+Create a bash script `service-deploy` in the `bin/cfn` directory.
+```sh
+#! /usr/bin/env bash
+set -e # stop execution of the script if it fails
+
+#This script will pass the value of the main root
+export THEIA_WORKSPACE_ROOT=$(pwd)
+
+
+CFN_PATH="$THEIA_WORKSPACE_ROOT/aws/cfn/db/template.yaml"
+CONFIG_PATH="$THEIA_WORKSPACE_ROOT/aws/cfn/db/config.toml"
+echo $CONFIG_PATH
+
+cfn-lint $CFN_PATH
+
+BUCKET=$(cfn-toml key deploy.bucket -t $CONFIG_PATH)
+REGION=$(cfn-toml key deploy.region -t $CONFIG_PATH)
+STACK_NAME=$(cfn-toml key deploy.stack_name -t $CONFIG_PATH)
+PARAMETERS=$(cfn-toml params v2 -t $CONFIG_PATH)
+
+
+aws cloudformation deploy \
+  --stack-name $STACK_NAME \
+  --template-file $CFN_PATH \
+  --s3-bucket $BUCKET \
+  --region $REGION \
+  --no-execute-changeset \
+  --tags group=cruddur-database \
+  --parameter-overrides $PARAMETERS MasterUserPassword=$DB_PASSWORD \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+**Note**
+- Make sure to export DB_PASSWORD as env var.
+- After the deployment, ensure to update the connection URL in the parameter store to utilize the new RDS endpoint.
+- Delete old RDS instance.
+- Update Route53 main domain and api. subdomain to point to new load balancer (this can be automated using a bash script) and visit the api health check.
+
+The following command can be used to generate a new password for RDS:
+```sh
+export DB_PASSWORD=$(aws secretsmanager get-random-password \
+--exclude-punctuation \
+--password-length 41 --require-each-included-type \
+--output text \
+--query RandomPassword)
+
+echo $DB_PASSWORD
+
+#save the env var on gitpod
+gp env MasterUserPassword=$DB_PASSWORD
+```
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/7a5bd05a-61d8-4336-9f2c-9a81190666a7)
 
 
