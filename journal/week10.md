@@ -12,7 +12,7 @@ This week we will be working with CloudFormation
 
 [Implement CFN Service Layer for Backend](#Implement-CFN-Service-Layer-for-Backend)
 
-[Implement CFN Database Layer (RDS)](#Implement-CFN-Database-Layer-(RDS))
+[Implement CFN Database Layer RDS](#Implement-CFN-Database-Layer-RDS)
 
 ## CloudFormation Basics (CFN)
 
@@ -1158,7 +1158,7 @@ Deploy Service Layer and before approving the changeset delete existing policies
 - CruddurTaskRole
 - CruddurServiceExecutionRole
 
-## Implement CFN Database Layer (RDS)
+## Implement CFN Database Layer RDS
 Create a new file `template.yaml` and folder `db` in the `aws/cfn` directory.
 ```sh
 AWSTemplateFormatVersion: 2010-09-09
