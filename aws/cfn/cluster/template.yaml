@@ -8,11 +8,11 @@ Description: |
     - internet facing
     - certificate attached from Amazon Certification Manager (ACM)
   - ALB Security Group
-  - HTTPS Listerner
+  - HTTPS Listener
     - send naked domain to frontend Target Group
     - send api. subdomain to backend Target Group
-  - HTTP Listerner
-    - redirects to HTTPS Listerner
+  - HTTP Listener
+    - redirects to HTTPS Listener
   - Backend Target Group
   - Frontend Target Group
 
@@ -60,7 +60,7 @@ Parameters:
     Default: "/api/health-check"
   BackendHealthCheckPort:
     Type: String
-    Default: 80
+    Default: 4567
   BackendHealthCheckProtocol:
     Type: String
     Default: HTTP
