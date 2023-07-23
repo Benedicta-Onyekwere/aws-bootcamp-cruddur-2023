@@ -1,6 +1,6 @@
 [deploy]
 bucket = 'cfn-artifacts-0pagu5'
-region = 'us-eastl-1'
+region = 'us-east-1'
 stack_name = 'CrdCicd'
 
 [parameters]
