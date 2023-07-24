@@ -2,11 +2,13 @@
 
 This week we are deploying our resources using AWS SAM.
 
-[Implement DynamoDB DynamoDB Streams Lambda using SAM CFN ](#Implement-DynamoDB-DynamoDB-Streams-Lambda-using-SAM-CFN)
+[Implement DynamoDB, DynamoDB Streams Lambda using SAM CFN ](#Implement-DynamoDB-DynamoDB-Streams-Lambda-using-SAM-CFN)
 
 [Implement CI/CD](#Implement-CI/CD)
 
-## Implement DynamoDB DynamoDB Streams Lambda using SAM CFN
+[Implement CFN Static Website Hosting for Frontend](#Implement-CFN-Static-Website-Hosting-for-Frontend)
+
+## Implement DynamoDB, DynamoDB Streams Lambda using SAM CFN
 
 **What is AWS SAM?** AWS SAM (Serverless Application Model) is an open-source framework provided by Amazon Web Services (AWS) that simplifies the deployment and management of serverless applications on AWS Cloud. It is an extension of AWS CloudFormation, specifically designed for building serverless applications using AWS Lambda, Amazon API Gateway, and other serverless services.
 
@@ -101,8 +103,8 @@ Resources:
             Stream: !GetAtt DynamoDBTable.StreamArn
             # TODO - Does our Lambda handle more than record?
             BatchSize: 1
-            # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-dynamodb.html#sam-function-dynamodb-startingposition
-            # TODO - This this the right value?
+            # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-dynamodb.html#sam-function-dynamodb-startingpositison
+            # TODO - Is this the right value?
             StartingPosition: LATEST
   LambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -618,4 +620,162 @@ AWS Console
 - After deploying the `cicd` stack, for new pipelines, the GitHub CodeStar connection needs to be manually enabled from the CodePipeline Console.
 - Go to CodePipeline → Settings → Connections.
 - Update the pending connection and establish the connection with GitHub.
+
+## Implement CFN Static Website Hosting for Frontend
+Create a new template files `template.yaml` and `config.toml` in aws/cfn/frontend directory.
+```sh
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  - CloudFront Distribution
+  - S3 Bucket for www.
+  - S3 Bucket for naked domain
+  - Bucket Policy
+
+Parameters:
+  CertificateArn:
+    Type: String
+  WwwBucketName:
+    Type: String
+  RootBucketName:
+    Type: String
+
+Resources:
+  RootBucketPolicy:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref RootBucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:s3:::${RootBucket}/*'
+            Principal: '*'
+  WWWBucket:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref WwwBucketName
+      WebsiteConfiguration:
+        RedirectAllRequestsTo:
+          HostName: !Ref RootBucketName
+  RootBucket:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
+    Type: AWS::S3::Bucket
+    #DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref RootBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicPolicy: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+  RootBucketDomain:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-recordset.html
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${RootBucketName}.
+      Name: !Sub ${RootBucketName}.
+      Type: A
+      AliasTarget:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html#cfn-route53-aliastarget-hostedzoneid
+        # Specify Z2FDTNDATAQYW2. This is always the hosted zone ID when you create an alias record that routes traffic to a CloudFront distribution.
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+  WwwBucketDomain:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-recordset.html
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${RootBucketName}.
+      Name: !Sub ${WwwBucketName}.
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html#cfn-route53-aliastarget-hostedzoneid
+        # Specify Z2FDTNDATAQYW2. This is always the hosted zone ID when you create an alias record that routes traffic to a CloudFront distribution.
+        HostedZoneId: Z2FDTNDATAQYW2
+  Distribution:
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudfront-distribution.html
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - bennieo.me
+          - www.bennieo.me
+        Comment: Frontend React Js for Cruddur
+        Enabled: true
+        HttpVersion: http2and3 
+        DefaultRootObject: index.html
+        Origins:
+          - DomainName: !GetAtt RootBucket.DomainName
+            Id: RootBucketOrigin
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: RootBucketOrigin
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: redirect-to-https
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+```
+config.toml
+```sh
+[deploy]
+bucket = 'cfn-artifacts-${RANDOM_STRING}'
+region = ${AWS_DEFAULT_REGION}'
+stack_name = 'CrdFrontend'
+
+[parameters]
+CertificateArn = ''
+WwwBucketName = 'www.<domain>
+RootBucketName = <domain>
+```
+Create a new deploy script file `frontend` in the `bin/cfn` directory.
+```sh
+#! /usr/bin/env bash
+set -e # stop the execution of the script if it fails
+
+CFN_PATH="/workspaces/aws-bootcamp-cruddur-2023/aws/cfn/frontend/template.yaml"
+CONFIG_PATH="/workspaces/aws-bootcamp-cruddur-2023/aws/cfn/frontend/config.toml"
+echo $CFN_PATH
+
+cfn-lint $CFN_PATH
+
+BUCKET=$(cfn-toml key deploy.bucket -t $CONFIG_PATH)
+REGION=$(cfn-toml key deploy.region -t $CONFIG_PATH)
+STACK_NAME=$(cfn-toml key deploy.stack_name -t $CONFIG_PATH)
+PARAMETERS=$(cfn-toml params v2 -t $CONFIG_PATH)
+
+aws cloudformation deploy \
+  --stack-name $STACK_NAME \
+  --s3-bucket $BUCKET \
+  --s3-prefix frontend \
+  --region $REGION \
+  --template-file "$CFN_PATH" \
+  --no-execute-changeset \
+  --tags group=cruddur-frontend \
+  --parameter-overrides $PARAMETERS \
+  --capabilities CAPABILITY_NAMED_IAM 
+```
+
+**Note** 
+- If you are not using AWS Lambda functions, there is no need using SAM because it does not have much benefit hence, using CFN is better in such cases.
+- In AWS, delete old root domain A record from Route53 before proceeding with deploy.
+
+
+![Screenshot 2023-07-24 at 01-08-05 CloudFormation - Stack](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/e70bab53-60b0-48cf-99ed-4e441efd10bd)
+
+
+### CFN Diagram
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/b4c03277-2d44-4cbc-b64e-ef29fcf86d6f)
+
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/f395bfc3-015b-4651-bcb6-2ab8ab9bbd23)
+
 
