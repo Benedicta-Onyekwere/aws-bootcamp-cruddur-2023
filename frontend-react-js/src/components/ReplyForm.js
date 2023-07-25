@@ -1,49 +1,95 @@
-import './ProfileInfo.css';
-import {ReactComponent as ElipsesIcon} from './svg/elipses.svg';
-import ProfileAvatar from 'components/ProfileAvatar'
+import './ReplyForm.css';
 import React from "react";
+import process from 'process';
 
-// [TODO] Authenication
-import { Auth } from 'aws-amplify';
+import ActivityContent  from '../components/ActivityContent';
 
-export default function ProfileInfo(props) {
-  const [popped, setPopped] = React.useState(false);
+export default function ReplyForm(props) {
+  const [count, setCount] = React.useState(0);
+  const [message, setMessage] = React.useState('');
 
-  const click_pop = (event) => {
-    setPopped(!popped)
+  const classes = []
+  classes.push('count')
+  if (240-count < 0){
+    classes.push('err')
   }
 
-  const signOut = async () => {
+  const onsubmit = async (event) => {
+    event.preventDefault();
     try {
-        await Auth.signOut({ global: true });
-        window.location.href = "/"
-        localStorage.removeItem("access_token")
-    } catch (error) {
-        console.log('error signing out: ', error);
+      const backend_url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/${props.activity.uuid}/reply`
+      const res = await fetch(backend_url, {
+        method: "POST",
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: message
+        }),
+      });
+      let data = await res.json();
+      if (res.status === 200) {
+        // add activity to the feed
+
+        let activities_deep_copy = JSON.parse(JSON.stringify(props.activities))
+        let found_activity = activities_deep_copy.find(function (element) {
+          return element.uuid ===  props.activity.uuid;
+        });
+        found_activity.replies.push(data)
+
+        props.setActivities(activities_deep_copy);
+        // reset and close the form
+        setCount(0)
+        setMessage('')
+        props.setPopped(false)
+      } else {
+        console.log(res)
+      }
+    } catch (err) {
+      console.log(err);
     }
   }
 
-  const classes = () => {
-    let classes = ["profile-info-wrapper"];
-    if (popped === true){
-      classes.push('popped');
-    }
-    return classes.join(' ');
+  const textarea_onchange = (event) => {
+    setCount(event.target.value.length);
+    setMessage(event.target.value);
   }
 
-  return (
-    <div className={classes()}>
-      <div className="profile-dialog">
-        <button onClick={signOut}>Sign Out</button> 
-      </div>
-      <div className="profile-info" onClick={click_pop}>
-        <ProfileAvatar id={props.user.cognito_user_uuid} />
-        <div className="profile-desc">
-          <div className="profile-display-name">{props.user.display_name || "My Name" }</div>
-          <div className="profile-username">@{props.user.handle || "handle"}</div>
+  let content;
+  if (props.activity){
+    content = <ActivityContent activity={props.activity} />;
+  }
+
+
+  if (props.popped === true) {
+    return (
+      <div className="popup_form_wrap">
+        <div className="popup_form">
+          <div className="popup_heading">
+          </div>
+          <div className="popup_content">
+            <div className="activity_wrap">
+              {content}
+            </div>
+            <form 
+              className='replies_form'
+              onSubmit={onsubmit}
+            >
+              <textarea
+                type="text"
+                placeholder="what is your reply?"
+                value={message}
+                onChange={textarea_onchange} 
+              />
+              <div className='submit'>
+                <div className={classes.join(' ')}>{240-count}</div>
+                <button type='submit'>Reply</button>
+              </div>
+            </form>
+          </div>
         </div>
-        <ElipsesIcon className='icon' />
       </div>
-    </div>
-  )
+    );
+  }
 }

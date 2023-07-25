@@ -80,7 +80,7 @@ Resources:
           - www.bennieo.me
         Comment: Frontend React Js for Cruddur
         Enabled: true
-        HttpVersion: http2and3 
+        HttpVersion: http2
         DefaultRootObject: index.html
         Origins:
           - DomainName: !GetAtt RootBucket.DomainName
