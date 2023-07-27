@@ -35,7 +35,7 @@ jobs:
       - name: Configure AWS credentials from Test account
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::914347776203:role/CrdSyncRole-Role-CEQM4DAD2DN6
+          role-to-assume: arn:aws:iam::914347776203:role/CrdSyncRole-Role-15G53X0FG9OO9
           aws-region: us-east-1
       - uses: actions/checkout@v3
       - name: Set up Ruby

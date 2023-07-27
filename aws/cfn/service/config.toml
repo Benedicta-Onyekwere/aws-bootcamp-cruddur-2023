@@ -2,3 +2,7 @@
 bucket = 'cfn-artifacts-0pagu5'
 region = 'us-east-1'
 stack_name = 'CrdSrvBackendFlask'
+
+[parameters]
+EnvFrontendUrl = 'https://bennieo.me'
+EnvBackendUrl = 'https://api.bennieo.me'
