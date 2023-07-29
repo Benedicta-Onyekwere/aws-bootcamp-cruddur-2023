@@ -4,11 +4,14 @@ With our AWS Cloud Project Bootcamp coming to a close, Week X was created to cle
 
 [Sync Tool for Static Website Hosting](#Sync-Tool-for-Static-Website-Hosting)
 
+[Reconnect Database and Postgres Confirmation Lambda](#Reconnect-Database-and-Postgres-Confirmation-Lambda)
+
+[Fix CORS to Use Domain Name for Web-app](#Fix-CORS-to-Use-Domain-Name-for-Web-app)
 
 
 
 
-### Sync Tool for Static Website Hosting
+## Sync Tool for Static Website Hosting
 
 ### Setting up frontend build
 
@@ -195,6 +198,9 @@ With
       setErrors(error.message)
 ```
 Execute the build script to generate a production build of the React app with the embedded environment variables.
+```sh
+bin/frontend/build
+```
 Zipped the content of the output files of the build with:
 ```sh
 zip -r build.zip build/
@@ -268,15 +274,24 @@ SYNC_CLOUDFRONT_DISTRUBTION_ID=
 SYNC_BUILD_DIR=<%= ENV['THEIA_WORKSPACE_ROOT'] %>/frontend-react-js/build
 SYNC_OUTPUT_CHANGESET_PATH=<%=  ENV['THEIA_WORKSPACE_ROOT'] %>/tmp/sync-changeset.json
 SYNC_AUTO_APPROVE=false
-Add this to the frontend generate-env script.
+```
+Updated the `bin/frontend/generate-env` script to add code to generate the `sync.env` file using the `erb/sync.env.erb` template.
+
+This change ensures that the sync.env file uses the correct values for synchronization.
+```sh
+#!/usr/bin/env ruby
+require 'erb'
+template = File.read 'erb/frontend-react-js.env.erb'
+content = ERB.new(template).result(binding)
+filename = 'frontend-react-js.env'
+File.write(filename, content)
 
 template = File.read 'erb/sync.env.erb'
 content = ERB.new(template).result(binding)
-filename = "sync.env"
+filename = 'sync.env'
 File.write(filename, content)
-Run the script to generate the sync.env file in the root directory.
 ```
-Execute the static-build script, followed by the sync script. Confirm the upload of the contents to S3 and the invalidation of the CloudFront cache.
+Execute the build script, followed by the sync script. Confirm the upload of the contents to S3 and the invalidation of the CloudFront cache.
 
 ### GitHub Action CICD - Frontend
 Create two new files, Gemfile and Rakefile, in the root of the project.
@@ -517,13 +532,165 @@ Updated `gitpod.yml` file with the bundle update.
 ```
 Update the `role-to-assume` in the `sync.yaml` file in the `.gitHub/workflows` directory with the ARN (Amazon Resource Name) of this role.
 
+## Reconnect Database and Postgres Confirmation Lambda
 
-  
+Updated `template.yaml` in the `aws/cfn/cicd` directory.
 
- 
+Modified the ServiceName parameter to explicitly specify the value as "backend-flask" instead of using a cross-stack reference, so that the service stack when necessary can be torn down independently without it affecting the `CICD` being torn down as well.
+
+The cross-stack reference to ${ServiceStack}ServiceName has been commented out.
+ ```sh
+                ClusterName: 
+                  Fn::ImportValue:
+                    !Sub ${ClusterStack}ClusterName
+                # We decided not to use a cross-stack reference so we can
+                # tear down a service independently    
+                ServiceName: backend-flask
+                  # Fn::ImportValue:
+                   # !Sub ${ServiceStack}ServiceName
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+ ```
+
+Updated `aws/cfn/service/template.yaml` by increasing the Timeout value from 5 to 6 for the health check in the service definition.
+```sh
+HealthCheck:
+            Command:
+              - 'CMD-SHELL'
+              - 'python /backend-flask/bin/health-check'
+            Interval: 30
+            Timeout: 6
+            Retries: 3
+            StartPeriod: 60
+```
+
+Updated `backend-flask/app.py` file
+
+From
+```sh
+ rollbar_access_token = os.getenv('ROLLBAR_ACCESS_TOKEN')
+ @app.before_first_request
+   def init_rollbar():
+```
+With
+```sh
+rollbar_access_token = os.getenv('ROLLBAR_ACCESS_TOKEN')
+with app.app_context():
+  def init_rollbar():
+```
+
+Updated `docker-compose.yml` file
+
+From
+```sh
+ backend-flask:
+    env_file:
+      - backend-flask.env
+    build: ./backend-flask
+```
+With
+```sh
+ backend-flask:
+    env_file:
+      - backend-flask.env
+    build: 
+       context:  ./backend-flask
+       dockerfile: Dockerfile.prod
+```
+
+### Reconnect DB
+- Configure the DB URL and update the security group (SG) for the new RDS DB.
+- Perform a schema load on the RDS.
+- Execute the following command to perform migrations on the production DB:
+```sh
+CONNECTION_URL=$PROD_CONNECTION_URL ./bin/db/migrate
+```
+
+### Fix CloudFront distribution for SPA
+
+Update the Distribution resource in the frontend template.yaml file to include an error page:
+```sh
+CustomErrorResponses:
+	- ErrorCode: 403
+	  ResponseCode: 200
+	  ResponsePagePath: /index.html
+```
+
+### Update Post Confirmation Lambda
+
+Updated `cruddur-post-confirrmation.py`file in the ` aws/lambdas` directory with:
+```sh
+   import json
+import psycopg2
+import os
 
 
+def lambda_handler(event, context):
+    user = event['request']['userAttributes']
+    user_display_name = user['name']
+    user_email = user['email']
+    user_handle = user['preferred_username']
+    user_cognito_id = user['sub']
+    
+    try:
+        sql = """
+            INSERT INTO public.users (
+                display_name, 
+                email,
+                handle, 
+                cognito_user_id
+            ) 
+            VALUES (%s, %s, %s, %s)
+        """
+        
+        params = [
+            user_display_name,
+            user_email,
+            user_handle,
+            user_cognito_id
+        ]
+        
+        with psycopg2.connect(os.getenv('CONNECTION_URL')) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+            conn.commit()
 
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+    else:
+        print("Data inserted successfully")
+    finally:
+        print('Database connection closed.')
+    
+    return event
+```
+### In AWS Console
+- Also updated the `cruddur-post-confirrmation.py` lambda function as shown above.
+- Updated Connection Url Env Var of Post confirmation lambda to use the new DB Connection URL.
+- Updated VPC for lambda to use the VPC created for cruddur.
+- Chose Public Subnets attached to the VPC.
+- Created a new security group `CognitoLambdaSG` with outbound all rule for the Post confirmation lambda.
+- In `CrdDbRDSSG`, added a new inbound rule for Postgresql, set source to Post Confirmation lambda SG.
+- Updated the lambda VPC SG with this new CognitoPostConf SG.
+- Waited for the update to finish.
+- Login and try posting a crud.
+
+## Fix CORS to Use Domain Name for Web-app
+Updated `config.toml` file in the `aws/cfn/service` directory for the `EnvFrontendUrl` and `EnvBackendUrl` to use the exact values with https:// instead of *. Then used parameters to specify these values.
+```sh
+[deploy]
+bucket = ''
+region = 'AWS_DEFAULT_REGION
+stack_name = 'CrdSrvBackendFlask'
+
+[parameters]
+EnvFrontendUrl = 'https://DOMAIN_NAME'
+EnvBackendUrl = 'https://api.DOMAIN_NAME'
+```
+Updated the deploy script to include the necessary parameters by uncommenting the parameter variable assignment.
+
+   
 
 
 
