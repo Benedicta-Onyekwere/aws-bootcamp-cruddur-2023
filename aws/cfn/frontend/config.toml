@@ -1,0 +1,9 @@
+[deploy]
+bucket = 'cfn-artifacts-0pagu5'
+region = 'us-east-1'
+stack_name = 'CrdFrontend'
+
+[parameters]
+CertificateArn = 'arn:aws:acm:us-east-1:914347776203:certificate/73de0faa-4ce3-4d0a-84c3-e2dbf725cb76'
+WWWBucketName = 'www.bennieo.me'
+RootBucketName = 'bennieo.me'
