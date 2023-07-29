@@ -6,7 +6,11 @@ With our AWS Cloud Project Bootcamp coming to a close, Week X was created to cle
 
 [Reconnect Database and Postgres Confirmation Lambda](#Reconnect-Database-and-Postgres-Confirmation-Lambda)
 
-[Fix CORS to Use Domain Name for Web-app](#Fix-CORS-to-Use-Domain-Name-for-Web-app)
+[Fix CORS to Use Domain Name for Web-app](#Fix-CORS-to-Use-Domain-Name-for-Web-App)
+
+[Ensuring CI/CD Pipeline and Create Activity Works](#[Ensuring-CI/CD-Pipeline-and-Create-Activity-Works)
+
+[Refactor JWT To Use a Decorator in Flask App](#Refactor-JWT-To-Use-a-Decorator-in-Flask-App)
 
 
 
@@ -622,8 +626,8 @@ CustomErrorResponses:
 Updated `cruddur-post-confirrmation.py`file in the ` aws/lambdas` directory with:
 ```sh
    import json
-import psycopg2
-import os
+   import psycopg2
+   import os
 
 
 def lambda_handler(event, context):
@@ -688,10 +692,327 @@ stack_name = 'CrdSrvBackendFlask'
 EnvFrontendUrl = 'https://DOMAIN_NAME'
 EnvBackendUrl = 'https://api.DOMAIN_NAME'
 ```
-Updated the deploy script to include the necessary parameters by uncommenting the parameter variable assignment.
+Updated the deploy script to include the necessary parameters by uncommenting the parameter variable assignment in the `bin/cfn/service`.
 
-   
+## Ensuring CI/CD Pipeline and Create Activity Works
+### Fix Activities user_handle
 
+Updated `app.py` file in the `backend-flask` directory in order for the user_handle not to be hardcoded.Added token verification using cognito_jwt_token.verify() to authenticate the request.
+Replaced the user_handle variable with cognito_user_id in the CreateActivity.run() function call.
+```sh
+@app.route("/api/activities", methods=['POST','OPTIONS'])
+@cross_origin()
+def data_activities():
+  access_token = extract_access_token(request.headers)
+  try:
+    claims = cognito_jwt_token.verify(access_token)
+    cognito_user_id = claims['sub']
+    message = request.json['message']
+    ttl = request.json['ttl']
+    model = CreateActivity.run(message, cognito_user_id, ttl)
+    if model['errors'] is not None:
+      return model['errors'], 422
+    else:
+      return model['data'], 200
+  except TokenVerifyError as e:
+    # unauthenicatied request
+    app.logger.debug(e)
+    return {}, 401
+```
+
+Updated `create_activity.py` file in the `backend-flask/services` directory to to use `cognito_user_id` instead of `user_handle`.
+```sh
+from datetime import datetime, timedelta, timezone
+
+from lib.db import db
+
+class CreateActivity:
+    def run(message, cognito_user_id, ttl):
+        model = {"errors": None, "data": None}
+
+        now = datetime.now(timezone.utc).astimezone()
+
+        if ttl == "30-days":
+            ttl_offset = timedelta(days=30)
+        elif ttl == "7-days":
+            ttl_offset = timedelta(days=7)
+        elif ttl == "3-days":
+            ttl_offset = timedelta(days=3)
+        elif ttl == "1-day":
+            ttl_offset = timedelta(days=1)
+        elif ttl == "12-hours":
+            ttl_offset = timedelta(hours=12)
+        elif ttl == "3-hours":
+            ttl_offset = timedelta(hours=3)
+        elif ttl == "1-hour":
+            ttl_offset = timedelta(hours=1)
+        else:
+            model["errors"] = ["ttl_blank"]
+
+        if cognito_user_id == None or len(cognito_user_id) < 1:
+            model["errors"] = ["cognito_user_id_blank"]
+
+        if message == None or len(message) < 1:
+            model["errors"] = ["message_blank"]
+        elif len(message) > 280:
+            model["errors"] = ["message_exceed_max_chars"]
+
+        if model["errors"]:
+            model["data"] = {"cognito_user_id": cognito_user_id, "message": message}
+        else:
+            expires_at = now + ttl_offset
+            uuid = CreateActivity.create_activity(cognito_user_id, message, expires_at)
+
+            object_json = CreateActivity.query_object_activity(uuid)
+            model["data"] = object_json
+        return model
+
+    def create_activity(cognito_user_id, message, expires_at):
+        sql = db.template("activities", "create")
+        uuid = db.query_commit(
+            sql,
+            {
+                "cognito_user_id": cognito_user_id,
+                "message": message,
+                "expires_at": expires_at,
+            },
+        )
+        return uuid
+
+    def query_object_activity(uuid):
+        sql = db.template("activities", "object")
+        return db.query_object_json(sql, {"uuid": uuid})
+```
+
+Also updated `create.sql` file in the `backend-flask/db/sql/activities` directory to also use cognito_user_id instead of user_handle 
+```sh
+VALUES (
+  (SELECT uuid 
+    FROM public.users 
+    WHERE users.cognito_user_id = %(cognito_user_id)s
+    LIMIT 1
+  ),
+  %(message)s,
+```
+Updated `ActivityForm.js` file in the `frontend-react-js/src/components` directory:
+```sh
+import React from "react";
+import process from 'process';
+import {ReactComponent as BombIcon} from './svg/bomb.svg';
+import {getAccessToken} from '../lib/CheckAuth';
+
+    try {
+      const backend_url = `${process.env.REACT_APP_BACKEND_URL}/api/activities`
+      console.log('onsubmit payload', message)
+      await getAccessToken()
+      const access_token = localStorage.getItem("access_token")
+      const res = await fetch(backend_url, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json'
+        },
+```
+In `seed.sql` file in the `backend-flask/db` directory, added a new user.
+
+**Note**
+- To update changes in DB, execute this command `./bin/db/setup`.
+- In real world or system, there should be different cognito user pool for production and development.
+
+### Fix CFN CICD Template
+ Renamed the CodeBuildBakeImageStack stack to CodeBuild and updated this in both the `template.yaml` and `codebuild.yaml` files in the `aws/cfn/cicd` directory.
+ 
+Updated `config.toml` file in the `aws/cfn/cicd` directory to include:
+```sh
+BuildSpec = 'backend-flask/buildspec.yml'
+```
+Updated `codebuild.yaml` in the `aws/cfn/cicd/nested` directory with:
+```sh
+  BuildSpec:
+    Type: String
+    Default: 'buildspec.yaml'
+  ArtifactBucketName:
+    Type: String
+
+Outputs:
+  CodeBuildProjectName:
+    Description: "CodeBuildProjectName"
+    Value: !Ref CodeBuild
+```
+Also did same for `template.yaml` file in the `aws/cfn/cicd` directory.
+```sh
+ Parameters:
+        ArtifactBucketName: !Ref ArtifactBucketName
+        BuildSpec: !Ref BuildSpec
+```
+
+Add `codebuild:BatchGetBuilds` to codebuild permissions in template.yaml
+
+Add this permission to both pipeline `template.yaml` and `codebuild.yaml` template.
+```sh
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}S3ArtifactAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - s3:*
+                Effect: Allow
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucketName}
+                  - !Sub arn:aws:s3:::${ArtifactBucketName}/*  
+```
+
+## Refactor JWT To Use a Decorator in Flask App
+
+Using a Decorator helps to reduce the verbosity of codes but caution should be used while applying this for future reference to the code and for easy understanding by others who maybe working with the code.
+
+### Reply Closing On Click
+
+To enable closing reply-popup form in the crud messages, this function is added to the `ReplyForm.js` file in the `frontend-react-js/src/components` directory:
+```sh
+const close = (event) => {
+    if (event.target.classList.contains("reply_popup")) {
+      props.setPopped(false);
+    }
+  };
+```
+Added the reply_popup class to the wrapping div to apply styling for the reply popup.
+```sh
+  if (props.popped === true) {
+    return (
+      <div className="popup_form_wrap reply_popup" onClick={close}>
+        <div className="popup_form">
+          <div className="popup_heading">
+          </div>
+```
+
+### JWT Auth Decorator
+The following code is added to the `cognito_jwt_token.py` file in the `backend-flask/lib` directory:
+```sh
+from functools import wraps, partial
+from flask import request, g
+import os
+
+def jwt_required(f=None, on_error=None):
+    if f is None:
+        return partial(jwt_required, on_error=on_error)
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        cognito_jwt_token = CognitoJwtToken(
+            user_pool_id=os.getenv("AWS_COGNITO_USER_POOL_ID"), 
+            user_pool_client_id=os.getenv("AWS_COGNITO_USER_POOL_CLIENT_ID"),
+            region=os.getenv("AWS_DEFAULT_REGION")
+        )
+        access_token = extract_access_token(request.headers)
+        try:
+            claims = cognito_jwt_token.verify(access_token)
+            # is this a bad idea using a global?
+            g.cognito_user_id = claims['sub']  # storing the user_id in the global g object
+        except TokenVerifyError as e:
+            # unauthenticated request
+            app.logger.debug(e)
+            if on_error:
+                on_error(e)
+            return {}, 401
+        return f(*args, **kwargs)
+    return decorated_function
+```
+
+ While the `app.py` file is updated in the `backend-flask` directory, in which the `jwt_required decorator` is imported and the following routes are updated with it as well:
+```sh
+from flask import request, g
+from lib.cognito_jwt_token import jwt_required
+
+
+@app.route("/api/message_groups", methods=['GET'])
+@jwt_required()
+def data_message_groups():
+  model = MessageGroups.run(cognito_user_id=g.cognito_user_id)
+  if model['errors'] is not None:
+    return model['errors'], 422
+  else:
+    return model['data'], 200
+
+
+@app.route("/api/messages/<string:message_group_uuid>", methods=['GET'])
+@jwt_required()
+def data_messages(message_group_uuid):
+  model = Messages.run(
+      cognito_user_id=g.cognito_user_id,
+      message_group_uuid=message_group_uuid
+    )
+  if model['errors'] is not None:
+    return model['errors'], 422
+  else:
+    return model['data'], 200
+
+
+@app.route("/api/messages", methods=['POST','OPTIONS'])
+@cross_origin()
+@jwt_required()
+def data_create_message():
+  message_group_uuid   = request.json.get('message_group_uuid',None)
+  user_receiver_handle = request.json.get('handle',None)
+  message = request.json['message']
+  if message_group_uuid == None:
+    # Create for the first time
+    model = CreateMessage.run(
+      mode="create",
+      message=message,
+      cognito_user_id=g.cognito_user_id,
+      user_receiver_handle=user_receiver_handle
+    )
+  else:
+    # Push onto existing Message Group
+    model = CreateMessage.run(
+      mode="update",
+      message=message,
+      message_group_uuid=message_group_uuid,
+      cognito_user_id=g.cognito_user_id
+    )
+  if model['errors'] is not None:
+    return model['errors'], 422
+  else:
+    return model['data'], 200
+
+@app.route("/api/activities/home", methods=['GET'])
+#@xray_recorder.capture('activities_home')
+@jwt_required(on_error=default_home_feed)
+def data_home():
+  data = HomeActivities.run(cognito_user_id=g.cognito_user_id)
+  return data, 200
+
+
+@app.route("/api/activities", methods=['POST','OPTIONS'])
+@cross_origin()
+@jwt_required()
+def data_activities():
+  message = request.json['message']
+  ttl = request.json['ttl']
+  model = CreateActivity.run(message, g.cognito_user_id, ttl)
+  if model['errors'] is not None:
+    return model['errors'], 422
+  else:
+    return model['data'], 200
+
+@app.route("/api/profile/update", methods=['POST','OPTIONS'])
+@cross_origin()
+@jwt_required()
+def data_update_profile():
+  bio          = request.json.get('bio',None)
+  display_name = request.json.get('display_name',None)
+  model = UpdateProfile.run(
+    cognito_user_id=g.cognito_user_id,
+    bio=bio,
+    display_name=display_name
+  )
+  if model['errors'] is not None:
+    return model['errors'], 422
+  else:
+    return model['data'], 200
+```
 
 
 
