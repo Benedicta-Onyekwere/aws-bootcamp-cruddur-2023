@@ -12,6 +12,10 @@ With our AWS Cloud Project Bootcamp coming to a close, Week X was created to cle
 
 [Refactor JWT To Use a Decorator in Flask App](#Refactor-JWT-To-Use-a-Decorator-in-Flask-App)
 
+[Refactor App.py](#Refactor-App.py)
+
+[Refactor Flask Routes](#Refactor-Flask-Routes)
+
 
 
 
@@ -1012,6 +1016,340 @@ def data_update_profile():
     return model['errors'], 422
   else:
     return model['data'], 200
+```
+
+## Refactor App.py
+This function is used to refactor model error checking;
+```sh
+def model_json(model):
+    if model["errors"] is not None:
+        return model["errors"], 422
+    else:
+        return model["data"], 200
+```
+Created new files for different libraries and modules in the `backend-flask/lib` directory for the refactoring. They include:
+- cloudwatch.py
+```sh
+import watchtower
+import logging
+from flask import request
+
+# Configuring Logger to Use CloudWatch
+# LOGGER = logging.getLogger(__name__)
+# LOGGER.setLevel(logging.DEBUG)
+# console_handler = logging.StreamHandler()
+# cw_handler = watchtower.CloudWatchLogHandler(log_group='cruddur')
+# LOGGER.addHandler(console_handler)
+# LOGGER.addHandler(cw_handler)
+# LOGGER.info("test log")
+
+def init_cloudwatch(response):
+  timestamp = strftime('[%Y-%b-%d %H:%M]')
+  LOGGER.error('%s %s %s %s %s %s', timestamp, request.remote_addr, request.method, request.scheme, request.full_path, response.status)
+  return response
+```
+- cors.py
+```sh
+from flask_cors import CORS
+import os
+
+def init_cors(app):
+  frontend = os.getenv('FRONTEND_URL')
+  backend = os.getenv('BACKEND_URL')
+  origins = [frontend, backend]
+  cors = CORS(
+    app, 
+    resources={r"/api/*": {"origins": origins}},
+    headers=['Content-Type', 'Authorization'], 
+    expose_headers='Authorization',
+    methods="OPTIONS,GET,HEAD,POST"
+  )
+```
+- honeycomb.py
+```sh
+from opentelemetry import trace
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
+
+provider = TracerProvider()
+processor = BatchSpanProcessor(OTLPSpanExporter())
+provider.add_span_processor(processor)
+
+# OTEL ----------
+# Show this in the logs within the backend-flask app (STDOUT)
+#simple_processor = SimpleSpanProcessor(ConsoleSpanExporter())
+#provider.add_span_processor(simple_processor)
+
+trace.set_tracer_provider(provider)
+tracer = trace.get_tracer(__name__)
+
+def init_honeycomb(app):
+  FlaskInstrumentor().instrument_app(app)
+  RequestsInstrumentor().instrument()
+```
+- rollbar.py
+```sh
+rom flask import current_app as app
+from flask import got_request_exception
+from time import strftime
+import os
+import rollbar
+import rollbar.contrib.flask
+
+def init_rollbar():
+  rollbar_access_token = os.getenv('ROLLBAR_ACCESS_TOKEN')
+  rollbar.init(
+      # access token
+      rollbar_access_token,
+      # environment name
+      'production',
+      # server root directory, makes tracebacks prettier
+      root=os.path.dirname(os.path.realpath(__file__)),
+      # flask already sets up logging
+      allow_logging_basic_config=False)
+  # send exceptions from `app` to rollbar, using flask's signal system.
+  got_request_exception.connect(rollbar.contrib.flask.report_exception, app)
+  return rollbar
+```
+- xray.py
+```sh
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.ext.flask.middleware import XRayMiddleware
+
+def int_xray():
+  xray_url = osgetenv("AWS_XRAY_URL")
+  xray_recorder.configure(service='backend-flask', dynamic_naming=xray_url)
+  XRayMiddleware(app, xray_recorder)
+```
+Updated `NotificationsFeedPage.js` in the `frontend-react-js/src/pages` directory with:
+```sh
+import {checkAuth, getAccessToken} from 'lib/CheckAuth';
+
+const loadData = async () => {
+    try {
+      const backend_url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/notifications`
+      await getAccessToken()
+      const access_token = localStorage.getItem("access_token")
+      const res = await fetch(backend_url, {
+        headers: {
+          Authorization: `Bearer ${access_token}`
+        },
+        method: "GET"
+      });
+      let resJson = await res.json();
+
+      React.useEffect(()=>{
+      //prevents double call
+      if (dataFetchedRef.current) return;
+      dataFetchedRef.current = true;
+
+      loadData();
+      checkAuth(setUser);
+     }, [])
+```
+
+## Refactor Flask Routes
+Created a new file `helper.py` in the `backend-flask/lib` directory.
+```sh
+def model_json(model):
+  if model['errors'] is not None:
+    return model['errors'], 422
+  else:
+    return model['data'], 200
+```
+Updated `rollbar.py` file with:
+```sh
+def init_rollbar(app):
+```
+Created the following new files in a new directory `backend-flask/routes`.
+- activities.py
+```sh
+## flask
+from flask import request, g
+
+## decorators
+from aws_xray_sdk.core import xray_recorder
+from lib.cognito_jwt_token import jwt_required
+from flask_cors import cross_origin
+
+## services
+from services.home_activities import *
+from services.notifications_activities import *
+from services.create_activity import *
+from services.search_activities import *
+from services.show_activity import *
+from services.create_reply import *
+
+## helpers
+from lib.helpers import model_json
+
+def load(app):
+  def default_home_feed(e):
+    app.logger.debug(e)
+    app.logger.debug("unauthenicated")
+    data = HomeActivities.run()
+    return data, 200
+
+  @app.route("/api/activities/home", methods=['GET'])
+  #@xray_recorder.capture('activities_home')
+  @jwt_required(on_error=default_home_feed)
+  def data_home():
+    data = HomeActivities.run(cognito_user_id=g.cognito_user_id)
+    return data, 200
+
+  @app.route("/api/activities/notifications", methods=['GET'])
+  def data_notifications():
+    data = NotificationsActivities.run()
+    return data, 200
+
+  @app.route("/api/activities/search", methods=['GET'])
+  def data_search():
+    term = request.args.get('term')
+    model = SearchActivities.run(term)
+    return model_json(model)
+
+  @app.route("/api/activities", methods=['POST','OPTIONS'])
+  @cross_origin()
+  @jwt_required()
+  def data_activities():
+    message = request.json['message']
+    ttl = request.json['ttl']
+    model = CreateActivity.run(message, g.cognito_user_id, ttl)
+    return model_json(model)
+
+  @app.route("/api/activities/<string:activity_uuid>", methods=['GET'])
+  @xray_recorder.capture('activities_show')
+  def data_show_activity(activity_uuid):
+    data = ShowActivity.run(activity_uuid=activity_uuid)
+    return data, 200
+
+  @app.route("/api/activities/<string:activity_uuid>/reply", methods=['POST','OPTIONS'])
+  @cross_origin()
+  def data_activities_reply(activity_uuid):
+    user_handle  = 'andrewbrown'
+    message = request.json['message']
+    model = CreateReply.run(message, user_handle, activity_uuid)
+    return model_json(model) 
+```
+- general.py
+```sh
+from flask import request, g
+
+def load(app):
+  @app.route('/api/health-check')
+  def health_check():
+    return {'success': True, 'ver': 1}, 200
+
+  #@app.route('/rollbar/test')
+  #def rollbar_test():
+  #  g.rollbar.report_message('Hello World!', 'warning')
+  #  return "Hello World!" 
+```
+- messages.py
+```sh
+## flask
+from flask import request, g
+
+## decorators
+from aws_xray_sdk.core import xray_recorder
+from lib.cognito_jwt_token import jwt_required
+from flask_cors import cross_origin
+
+## services
+from services.message_groups import MessageGroups
+from services.messages import Messages
+from services.create_message import CreateMessage
+
+## helpers
+from lib.helpers import model_json
+
+def load(app):
+  @app.route("/api/message_groups", methods=['GET'])
+  @jwt_required()
+  def data_message_groups():
+    model = MessageGroups.run(cognito_user_id=g.cognito_user_id)
+    return model_json(model)
+
+  @app.route("/api/messages/<string:message_group_uuid>", methods=['GET'])
+  @jwt_required()
+  def data_messages(message_group_uuid):
+    model = Messages.run(
+        cognito_user_id=g.cognito_user_id,
+        message_group_uuid=message_group_uuid
+      )
+    return model_json(model)
+
+  @app.route("/api/messages", methods=['POST','OPTIONS'])
+  @cross_origin()
+  @jwt_required()
+  def data_create_message():
+    message_group_uuid   = request.json.get('message_group_uuid',None)
+    user_receiver_handle = request.json.get('handle',None)
+    message = request.json['message']
+    if message_group_uuid == None:
+      # Create for the first time
+      model = CreateMessage.run(
+        mode="create",
+        message=message,
+        cognito_user_id=g.cognito_user_id,
+        user_receiver_handle=user_receiver_handle
+      )
+    else:
+      # Push onto existing Message Group
+      model = CreateMessage.run(
+        mode="update",
+        message=message,
+        message_group_uuid=message_group_uuid,
+        cognito_user_id=g.cognito_user_id
+      )
+    return model_json(model)
+```
+- users.py
+```sh
+## flask
+from flask import request, g
+
+## decorators
+from aws_xray_sdk.core import xray_recorder
+from lib.cognito_jwt_token import jwt_required
+from flask_cors import cross_origin
+
+## services
+from services.users_short import UsersShort
+from services.update_profile import UpdateProfile
+from services.user_activities import UserActivities
+
+## helpers
+from lib.helpers import model_json
+
+def load(app):
+  @app.route("/api/activities/@<string:handle>", methods=['GET'])
+  #@xray_recorder.capture('activities_users')
+  def data_handle(handle):
+    model = UserActivities.run(handle)
+    return return_model(model)
+
+  @app.route("/api/users/@<string:handle>/short", methods=['GET'])
+  def data_users_short(handle):
+    data = UsersShort.run(handle)
+    return data, 200
+
+  @app.route("/api/profile/update", methods=['POST','OPTIONS'])
+  @cross_origin()
+  @jwt_required()
+  def data_update_profile():
+    bio          = request.json.get('bio',None)
+    display_name = request.json.get('display_name',None)
+    model = UpdateProfile.run(
+      cognito_user_id=g.cognito_user_id,
+      bio=bio,
+      display_name=display_name
+    )
+    return model_json(model)
 ```
 
 
