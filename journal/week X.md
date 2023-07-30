@@ -16,6 +16,14 @@ With our AWS Cloud Project Bootcamp coming to a close, Week X was created to cle
 
 [Refactor Flask Routes](#Refactor-Flask-Routes)
 
+[Implement Replies for Posts](#Implement-Replies-for-Posts)
+
+[Improved Error Handling for the App](#Improved-Error-Handling-for-the-App)
+
+[Activities Show Page](#Activities-Show-Page)
+
+[More General Cleanup Part 1 and Part 2](#More-General-Cleanup-Part-1-and-Part-2)
+
 
 
 
@@ -1351,6 +1359,9 @@ def load(app):
     )
     return model_json(model)
 ```
+
+## Implement Replies for Posts
+
 
 
 
