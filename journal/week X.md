@@ -1361,7 +1361,259 @@ def load(app):
 ```
 
 ## Implement Replies for Posts
+### Backend-Flask
+In the `backend-flask/db/migrations` directory, created a new migration by running `bin/generate/migration reply_to_activity_uuid_to_string` and updated it.
+```sh
+from lib.db import db
 
+class ReplyToActivityUuidToStringMigration:
+  def migrate_sql():
+    data = """
+    ALTER TABLE activities
+    ALTER COLUMN reply_to_activity_uuid TYPE uuid USING reply_to_activity_uuid::uuid;
+    """
+    return data
+  def rollback_sql():
+    data = """
+    ALTER TABLE activities
+    ALTER COLUMN reply_to_activity_uuid TYPE integer USING (reply_to_activity_uuid::integer);
+    """
+    return data
+
+  def migrate():
+    db.query_commit(ReplyToActivityUuidToStringMigration.migrate_sql(),{
+    })
+
+  def rollback():
+    db.query_commit(ReplyToActivityUuidToStringMigration.rollback_sql(),{
+    })
+
+migration = ReplyToActivityUuidToStringMigration
+```
+To run the migration use this command;
+```sh
+./bin/db/migrate
+```
+Updated and created the following files in the `backend-flask/db/sql/activities` directory to use the reply activity type as uuid:
+- Updated `home.sql` with;
+```sh
+ activities.created_at,
+  (SELECT COALESCE(array_to_json(array_agg(row_to_json(array_row))),'[]'::json) FROM (
+  SELECT
+    replies.uuid,
+    reply_users.display_name,
+    reply_users.handle,
+    replies.message,
+    replies.replies_count,
+    replies.reposts_count,
+    replies.likes_count,
+    replies.reply_to_activity_uuid,
+    replies.created_at
+  FROM public.activities replies
+  LEFT JOIN public.users reply_users ON reply_users.uuid = replies.user_uuid
+  WHERE
+    replies.reply_to_activity_uuid = activities.uuid
+  ORDER BY  activities.created_at ASC
+  ) array_row) as replies
+```
+- Updated `object.sql` with;
+```sh
+ activities.expires_at,
+  activities.reply_to_activity_uuid
+```
+- Created new file `reply.sql`
+```sh
+NSERT INTO public.activities (
+  user_uuid,
+  message,
+  reply_to_activity_uuid
+)
+VALUES (
+  (SELECT uuid 
+    FROM public.users 
+    WHERE users.cognito_user_id = %(cognito_user_id)s
+    LIMIT 1
+  ),
+  %(message)s,
+  %(reply_to_activity_uuid)s
+) RETURNING uuid;
+```
+Updated `activities.py` file in the `backend/routes` directory to use the `cognito_user_id` instead of the hardcoded `user_handle`.
+```sh
+  @app.route("/api/activities/<string:activity_uuid>/reply", methods=['POST','OPTIONS'])
+  @cross_origin()
+  @jwt_required()
+  def data_activities_reply(activity_uuid):
+    message = request.json['message']
+    model = CreateReply.run(message, g.cognito_user_id, activity_uuid)
+    return model_json(model)
+```
+Updated `create_reply.py` in the `backend-flask/services` directory
+```sh
+from datetime import datetime, timedelta, timezone
+
+from lib.db import db
+
+class CreateReply:
+  def run(message, cognito_user_id, activity_uuid):
+    model = {
+      'errors': None,
+      'data': None
+    }
+
+    if cognito_user_id == None or len(cognito_user_id) < 1:
+      model['errors'] = ['cognito_user_id_blank']
+
+    if activity_uuid == None or len(activity_uuid) < 1:
+      model['errors'] = ['activity_uuid_blank']
+
+    if message == None or len(message) < 1:
+      model['errors'] = ['message_blank'] 
+    elif len(message) > 1024:
+      model['errors'] = ['message_exceed_max_chars'] 
+
+    if model['errors']:
+      # return what we provided
+      model['data'] = {
+        'message': message,
+        'reply_to_activity_uuid': activity_uuid
+      }
+    else:
+      uuid = CreateReply.create_reply(cognito_user_id,activity_uuid,message)
+
+      object_json = CreateReply.query_object_activity(uuid)
+      model['data'] = object_json
+    return model
+
+  def create_reply(cognito_user_id, activity_uuid, message):
+    sql = db.template('activities','reply')
+    uuid = db.query_commit(sql,{
+      'cognito_user_id': cognito_user_id,
+      'reply_to_activity_uuid': activity_uuid,
+      'message': message,
+    })
+    return uuid
+  def query_object_activity(uuid):
+    sql = db.template('activities','object')
+    return db.query_object_json(sql,{
+      'uuid': uuid
+    })
+```
+Updated the `migrate` and `rollback` files in the `bin/db` directory
+Migrate
+```sh
+ WHERE id = 1
+  """
+  db.query_commit(sql,{'last_successful_run': value},verbose=False)
+  return int(value)
+
+last_successful_run = get_last_successful_run()
+
+
+  match = re.match(r'^\d+', filename)
+  if match:
+    file_time = int(match.group())
+    print(last_successful_run)
+    print(file_time)
+    if last_successful_run < file_time:
+      mod = importlib.import_module(module_name)
+      print('=== running migration: ',module_name)
+      mod.migration.migrate()
+```
+Rollback
+```sh
+        mod = importlib.import_module(module_name)
+        print('=== rolling back: ',module_name)
+        mod.migration.rollback()
+        set_last_successful_run(str(file_time))
+```
+Also updated `migration` file in `bin/generate` directory from using ` AddBioColumnMigration` to using `klass`.
+```sh
+ db.query_commit({klass}Migration.rollback_sql(),{{
+    }}
+migration = {klass}Migration
+```
+
+### Frontend-react-js
+In the `frontend-react-js/src/components` directory, updated the following files:
+
+- ActivityActionReply.js added a console.log to the following code;
+```sh
+export default function ActivityActionReply(props) { 
+  const onclick = (event) => {
+    console.log('acitivty-action-reply',props.activity)
+    props.setReplyActivity(props.activity)
+    props.setPopped(true)
+  }
+```
+- ActivityItem.css
+```sh
+}
+
+.replies {
+  padding-left: 24px;
+  background: rgba(255,255,255,0.15);
+}
+.replies .activity_item{
+  background: var(--fg);
+}
+
+.acitivty_main {
+  padding: 16px;
+}
+```
+- ActivityItem.js
+```sh
+  return (
+      <div className="acitivty_main">
+        <ActivityContent activity={props.activity} />
+        <div className="activity_actions">
+          <ActivityActionReply setReplyActivity={props.setReplyActivity} activity={props.activity} setPopped={props.setPopped} activity_uuid={props.activity.uuid} count={props.activity.replies_count}/>
+          <ActivityActionRepost activity_uuid={props.activity.uuid} count={props.activity.reposts_count}/>
+          <ActivityActionLike activity_uuid={props.activity.uuid} count={props.activity.likes_count}/>
+          <ActivityActionShare activity_uuid={props.activity.uuid} />
+        </div>
+      </div>
+      {replies}
+    </div>
+```
+- ReplyForm.js
+```sh
+import {getAccessToken} from '../lib/CheckAuth';
+
+const onsubmit = async (event) => {
+    console.log('replyActivity',props.activity)
+    event.preventDefault();
+    try {
+      const backend_url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/${props.activity.uuid}/reply`
+      await getAccessToken()
+      const access_token = localStorage.getItem("access_token")
+      const res = await fetch(backend_url, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          activity_uuid: props.activity.uuid,
+          message: message
+        }),
+      });
+      let data = await res.json();
+      if (res.status === 200) {
+        // add activity to the feed
+        let activities_deep_copy = JSON.parse(JSON.stringify(props.activities))
+        let found_activity = activities_deep_copy.find(function (element) {
+          return element.uuid ===  props.activity.uuid;
+        });
+        console.log('found_activity',found_activity)
+        found_activity.replies.push(data)
+
+        props.setActivities(activities_deep_copy);
+```
+
+## Improved Error Handling for the App
 
 
 
