@@ -1614,8 +1614,408 @@ const onsubmit = async (event) => {
 ```
 
 ## Improved Error Handling for the App
+### Backend-Flask
+In the `backend-flask/db/sql/activities`, the `home.sql` file was updated eith the removal of the the subquery that was above and a new file `show.sql` was created.
+```sh
+SELECT
+  activities.uuid,
+  users.display_name,
+  users.handle,
+  activities.message,
+  activities.replies_count,
+  activities.reposts_count,
+  activities.likes_count,
+  activities.reply_to_activity_uuid,
+  activities.expires_at,
+  activities.created_at,
+  (SELECT COALESCE(array_to_json(array_agg(row_to_json(array_row))),'[]'::json) FROM (
+  SELECT
+    replies.uuid,
+    reply_users.display_name,
+    reply_users.handle,
+    replies.message,
+    replies.replies_count,
+    replies.reposts_count,
+    replies.likes_count,
+    replies.reply_to_activity_uuid,
+    replies.created_at
+  FROM public.activities replies
+  LEFT JOIN public.users reply_users ON reply_users.uuid = replies.user_uuid
+  WHERE 
+    replies.reply_to_activity_uuid = activities.uuid
+  ORDER BY activities.created_at ASC
+  ) array_row) as replies
+FROM public.activities
+LEFT JOIN public.users ON users.uuid = activities.user_uuid
+WHERE activities.uuid = %(uuid)s
+ORDER BY activities.created_at DESC
+```
+In the `backend-flask/services` directory, the `create_message.py` and `create_reply.py` files were both updated as follows:
+
+from
+```sh
+elif len(message) > 1024:
+  model['errors'] = ['message_exceed_max_chars'] 
+```
+To
+```sh
+elif len(message) > 1024:
+  model['errors'] = ['message_exceed_max_chars_1024']
+```
+
+### Frontend React JS
+In the `frontend-react-js/src/components` directory, the following files where updated and created:
+- Updated `ActivityActionReply.js` by removing:
+```sh
+console.log('acitivty-action-reply',props.activity)
+```
+Updated `ActionFeed.css` by adding:
+```sh
+.activity_feed_primer {
+  font-size: 20px;
+  text-align: center;
+  padding: 24px;
+  color: rgba(255,255,255,0.3)
+}
+```
+- Updated `ActivityFeed.js` with:
+```sh
+The rendering of the activity feed has been updated to display a primer message when there are no activities to show.
+export default function ActivityFeed(props) {
+  let content;
+  if (props.activities.length === 0){
+    content = <div className='activity_feed_primer'>
+      <span>Nothing to see here yet.</span>
+    </div>
+  } else {
+    content = <div className='activity_feed_collection'>
+      {props.activities.map(activity => {
+      return  <ActivityItem setReplyActivity={props.setReplyActivity} setPopped={props.setPopped} key={activity.uuid} activity={activity} />
+      })}
+    </div>
+  }
+
+  return (<div>
+    {content}
+  </div>
+  );
+}
+```
+- Updated `ActivityForm.js`
+```sh
+import {post} from 'lib/Requests';
+import FormErrors from 'components/FormErrors';
+
+const [errors, setErrors] = React.useState([]);
+
+ const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities`
+    const payload_data = {
+      message: message,
+      ttl: ttl
+    }
+    post(url,payload_data,setErrors,function(data){
+      // add activity to the feed
+      props.setActivities(current => [data,...current]);
+      // reset and close the form
+      setCount(0)
+      setMessage('')
+      setTtl('7-days')
+      props.setPopped(false)
+    })
+  }
+
+           <option value='1-hour'>1 hour </option>
+            </select>
+          </div>
+          <FormErrors errors={errors} />
+        </div>
+      </form>
+    );
+```
+- Created a new file `FormErrorItem.js`
+```sh
+export default function FormErrorItem(props) {
+    const render_error = () => {
+      switch (props.err_code)  {
+        case 'generic_500':
+          return "An internal server error has occurred."
+          break;
+        case 'generic_403':
+          return "You are not authorized to perform this action."
+          break;
+        case 'generic_401':
+          return "You are not authenticated to perform this action."
+          break;
+        // Replies
+        case 'cognito_user_id_blank':
+          return "The user was not provided."
+          break;
+        case 'activity_uuid_blank':
+          return "The post id cannot be blank."
+          break;
+        case 'message_blank':
+          return "The message cannot be blank."
+          break;
+        case 'message_exceed_max_chars_1024':
+          return "The message is too long, it should be less than 1024 characters."
+          break;
+        // Users
+        case 'message_group_uuid_blank':
+          return "The message group cannot be blank."
+          break;
+        case 'user_reciever_handle_blank':
+          return "You need to send a message to a valid user."
+          break;
+        case 'user_reciever_handle_blank':
+          return "You need to send a message to a valid user."
+          break;
+        // Profile
+        case 'display_name_blank':
+          return "The display name cannot be blank."
+          break;
+        default:
+          // In the case for errors returned from Cognito, they 
+          // directly return the error so we just display it.
+          return props.err_code
+          break;
+      }
+    }
+
+    return (
+      <div className="errorItem">
+        {render_error()}
+      </div>
+    )
+  }
+```
+- Created a new file `FormErrors.css`
+```sh
+.errors {
+    padding: 16px;
+    border-radius: 8px;
+    background: rgba(255,0,0,0.3);
+    color: rgb(255,255,255);
+    margin-top: 16px;
+    font-size: 14px;
+  }
+```
+- Created another new file `FormErrors.js`
+```sh
+import './FormErrors.css';
+import FormErrorItem from 'components/FormErrorItem';
+
+export default function FormErrors(props) {
+  let el_errors = null
+
+  if (props.errors.length > 0) {
+    el_errors = (<div className='errors'>
+      {props.errors.map(err_code => {
+        return <FormErrorItem err_code={err_code} />
+      })}
+    </div>)
+  }
+
+  return (
+    <div className='errorsWrap'>
+      {el_errors}
+    </div>
+  )
+}
+```
+Updated `MessageForm.js` file with:
+```sh
+import {post} from 'lib/Requests';
+import FormErrors from 'components/FormErrors';
+
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/messages`
+    let payload_data = { 'message': message }
+    if (params.handle) {
+      payload_data.handle = params.handle
+    } else {
+      payload_data.message_group_uuid = params.message_group_uuid
+    }
+    post(url,payload_data,setErrors,function(){
+      console.log('data:',data)
+      if (data.message_group_uuid) {
+        console.log('redirect to message group')
+        window.location.href = `/messages/${data.message_group_uuid}`
+      } else {
+        props.setMessages(current => [...current,data]);
+
+<div className={classes.join(' ')}>{1024-count}</div>
+        <button type='submit'>Message</button>
+      </div>
+      <FormErrors errors={errors} />
+    </form>
+  );
+}      
+```
+Updated `ProfileForm.js` with:
+```sh
+import {put} from 'lib/Requests';
+import FormErrors from 'components/FormErrors';
+
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/profile/update`
+    const payload_data = {
+      bio: bio,
+      display_name: displayName
+    }
+    put(url,payload_data,setErrors,function(data){
+      setBio(null)
+      setDisplayName(null)
+      props.setPopped(false)
+    })
+  }
+
+<input type="file" name="avatarupload" onChange={s3upload} />
+
+            </div>
+            <FormErrors errors={errors} />
+          </div>
+```
+Updated `ReplyForm.js` with;
+```sh
+import {post} from 'lib/Requests';
+import ActivityContent  from 'components/ActivityContent';
+import FormErrors from 'components/FormErrors';
+
+const [errors, setErrors] = React.useState([]);
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/${props.activity.uuid}/reply`
+    payload_data = {
+      activity_uuid: props.activity.uuid,
+      message: message
+    }
+    post(url,payload_data,setErrors,function(data){
+      // add activity to the feed
+      let activities_deep_copy = JSON.parse(JSON.stringify(props.activities))
+      let found_activity = activities_deep_copy.find(function (element) {
+        return element.uuid ===  props.activity.uuid;
+      });
+found_activity.replies.push(data)
+
+      props.setActivities(activities_deep_copy);
+      // reset and close the form
+      setCount(0)
+      setMessage('')
+      props.setPopped(false)
+    })
+  }
+```
+Created a new file `Requests.js` in the `frontend-react-js/src/lib` directory.
+```sh
+import {getAccessToken} from 'lib/CheckAuth';
+
+async function request(method,url,payload_data,setErrors,success){
+  if (setErrors !== null){
+    setErrors('')
+  }
+  let res
+  try {
+    await getAccessToken()
+    const access_token = localStorage.getItem("access_token")
+    const attrs = {
+      method: method,
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+
+    if (method !== 'GET') {
+      attrs.body = JSON.stringify(payload_data)
+    }
+
+    res = await fetch(url,attrs)
+    let data = await res.json();
+    if (res.status === 200) {
+      success(data)
+    } else {
+      if (setErrors !== null){
+        setErrors(data)
+      }
+      console.log(res,data)
+    }
+  } catch (err) {
+    console.log('request catch',err)
+    if (err instanceof Response) {
+        console.log('HTTP error detected:', err.status); // Here you can see the status.
+        if (setErrors !== null){
+          setErrors([`generic_${err.status}`]) // Just an example. Adjust it to your needs.
+        }
+    } else {
+      if (setErrors !== null){
+        setErrors([`generic_500`]) // For network errors or any other errors
+      }
+    }
+  }
+}
+
+export function post(url,payload_data,setErrors,success){
+  request('POST',url,payload_data,setErrors,success)
+}
+
+export function put(url,payload_data,setErrors,success){
+  request('PUT',url,payload_data,setErrors,success)
+}
+
+export function get(url,setErrors,success){
+  request('GET',url,null,setErrors,success)
+}
+
+export function destroy(url,payload_data,setErrors,success){
+  request('DELETE',url,payload_data,setErrors,success)
+}
+```
+In the `frontend-react-js/src/pages` updated the following files:
+- HomeFeedPage.js
+- MessageGroupNewPage.js
+- MessageGroupsPage.js
+- MessageGroupPage.js
+- NotificationsFeedPage.js
+- UserFeedPage.js
+
+```sh
+import {get} from 'lib/Requests';
+import {checkAuth} from 'lib/CheckAuth';
+
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/home`
+  get(url,null,function(data){
+      setActivities(data)
+    })
+
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/message_groups`
+ get(url,null,function(data){
+      setMessageGroups(data)
+
+ const url = `${process.env.REACT_APP_BACKEND_URL}/api/users/@${params.handle}/short`
+  get(url,null,function(data){
+      console.log('other user:',data)
+      setOtherUser(data)
+
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/messages/${params.message_group_uuid}`
+  get(url,null,function(data){
+      setMessages(data)
+
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/notifications`
+    get(url,null,function(data){
+      setActivities(data)
+    })
+
+const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/@${params.handle}`
+    get(url,null,function(data){
+      console.log('setprofile',data.profile)
+      setProfile(data.profile)
+      setActivities(data.activities)
+    })
+```
+-  Updated `SigninPage.js` and `SignupPage.js` with;
+```sh
+import FormErrors from 'components/FormErrors';
+
+ <FormErrors errors={errors} />
+```
 
 
-
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/1b3effc5-3616-4365-b0b2-e2726087d998)
 
 
