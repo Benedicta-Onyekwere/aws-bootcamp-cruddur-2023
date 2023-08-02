@@ -1615,7 +1615,8 @@ const onsubmit = async (event) => {
 
 ## Improved Error Handling for the App
 ### Backend-Flask
-In the `backend-flask/db/sql/activities`, the `home.sql` file was updated eith the removal of the the subquery that was above and a new file `show.sql` was created.
+In the `backend-flask/db/sql/activities`, updated the `home.sql` file with the removal of the subquery that is shown above and a new file `show.sql` was created.
+
 ```sh
 SELECT
   activities.uuid,
@@ -1881,7 +1882,7 @@ import FormErrors from 'components/FormErrors';
 
 const [errors, setErrors] = React.useState([]);
 const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/${props.activity.uuid}/reply`
-    payload_data = {
+const payload_data = {
       activity_uuid: props.activity.uuid,
       message: message
     }
@@ -1966,7 +1967,7 @@ export function destroy(url,payload_data,setErrors,success){
   request('DELETE',url,payload_data,setErrors,success)
 }
 ```
-In the `frontend-react-js/src/pages` updated the following files:
+In the `frontend-react-js/src/pages` updated the following files with the codes below:
 - HomeFeedPage.js
 - MessageGroupNewPage.js
 - MessageGroupsPage.js
@@ -2019,3 +2020,553 @@ import FormErrors from 'components/FormErrors';
 ![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/1b3effc5-3616-4365-b0b2-e2726087d998)
 
 
+## Activities Show Page
+### Backend-Flask
+
+### Fixed Migration
+In the `backend-flask/db` directory , updated the `migrations/<datetime>_reply_to_activity_uuid_to_string.py` by changing the data type of the `reply_to_activity_uuid` column in the activities table from integer to uuid. Then the rollback reverses it back.
+```sh
+def migrate_sql():
+    data = """
+ALTER TABLE activities DROP COLUMN reply_to_activity_uuid;
+ALTER TABLE activities ADD COLUMN reply_to_activity_uuid uuid;
+"""
+    return data
+
+def rollback_sql():
+    data = """
+ALTER TABLE activities DROP COLUMN reply_to_activity_uuid;
+ALTER TABLE activities ADD COLUMN reply_to_activity_uuid integer;
+"""
+    return data
+```
+Updated the `show.sql` file in the `backend-flask/db/sql/activities` with:
+```sh
+SELECT
+  (SELECT COALESCE(row_to_json(object_row),'{}'::json) FROM (
+    SELECT
+      activities.uuid,
+      users.display_name,
+      users.handle,
+      activities.message,
+      activities.replies_count,
+      activities.reposts_count,
+      activities.likes_count,
+      activities.expires_at,
+      activities.created_at
+  ) object_row) as activity,
+  (SELECT COALESCE(array_to_json(array_agg(row_to_json(array_row))),'[]'::json) FROM (
+  SELECT
+    replies.uuid,
+```
+In the `backend-flask/routes/activities.py` removed the following lines of code:
+```sh
+from services.show_activity import *
+
+@app.route("/api/activities/<string:activity_uuid>", methods=['GET'])
+  @xray_recorder.capture('activities_show')
+  def data_show_activity(activity_uuid):
+    data = ShowActivity.run(activity_uuid=activity_uuid)
+    return data, 200
+```
+In the `backend-flask/routes/users.py` added the following:
+```sh
+from services.show_activity import ShowActivity
+
+ @app.route("/api/activities/@<string:handle>", methods=['GET'])
+  #@xray_recorder.capture('activities_users')
+  def data_users_activities(handle):
+
+@app.route("/api/activities/@<string:handle>/status/<string:activity_uuid>", methods=['GET'])
+  def data_show_activity(handle,activity_uuid):
+    data = ShowActivity.run(activity_uuid)
+    return data, 200
+```
+In the `backend-flask/services/show_activity.py` updated with:
+```sh
+from lib.db import db
+
+class ShowActivity:
+  sql = db.template('activities','show')
+    results = db.query_array_json(sql,{
+      'uuid': activity_uuid
+    })
+```
+### Frontend-react-js
+Updated and created some of the following files:
+- Updated `App.js` file by adding:
+```sh
+import ActivityShowPage from './pages/ActivityShowPage';
+
+ {
+    path: "/@:handle/status/:activity_uuid",
+    element: <ActivityShowPage />
+  },
+```
+In the `frontend-react-js/components` directory, updated the following files with codes below;
+- ActivityActionLike.js
+- ActivityActionReply.js
+- ActivityActionPost.js
+- ActivityActionShare.js
+
+```sh
+ export default function ActivityActionLike(props) { 
+  const onclick = (event) => {
+    event.preventDefault()
+    console.log('toggle like/unlike')
+    return false
+  }
+
+export default function ActivityActionReply(props) { 
+  const onclick = (event) => {
+    event.preventDefault()
+    props.setReplyActivity(props.activity)
+    props.setPopped(true)
+    return false
+  }
+
+export default function ActivityActionRepost(props) { 
+  const onclick = (event) => {
+    event.preventDefault()
+    console.log('trigger repost')
+    return false
+  }
+
+export default function ActivityActionRepost(props) { 
+  const onclick = (event) => {
+    event.preventDefault()
+    console.log('trigger share')
+    return false
+  }
+```
+- ActivityContent.css:
+Changed the CSS selector from `.activity_content a.activity_identity` to `.activity_content .activity_identity`.
+```sh
+.activity_content .activity_identity {
+  flex-grow: 1;
+  text-decoration: none;
+  font-size: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.activity_content .activity_identity a {
+  text-decoration: none;
+  display: block;
+  flex-shrink: 1;
+}
+
+.activity_content .activity_identity .display_name {
+  font-weight: 800;
+  color: #fff;
+}
+
+.activity_content .activity_identity .display_name:hover {
+  text-decoration: underline;
+}
+
+.activity_content  .activity_identity .handle {
+  color: rgb(255,255,255,0.5);
+}
+```
+- ActivityContent.js:
+Replaced the <div> element with a <Link> component for the activity_avatar element.
+```sh
+  return (
+    <div className='activity_content_wrap'>
+      <Link className='activity_avatar'to={`/@`+props.activity.handle} ></Link>
+      <div className='activity_content'>
+        <div className='activity_meta'>
+        <div className='activity_identity' >
+            <Link className='display_name' to={`/@`+props.activity.handle}>{props.activity.display_name}</Link>
+            <Link className="handle" to={`/@`+props.activity.handle}>@{props.activity.handle}</Link>
+          </div>{/* activity_identity */}
+          <div className='activity_times'>
+            <div className="created_at" title={format_datetime(props.activity.created_at)}>
+              <span className='ago'>{time_ago(props.activity.created_at)}</span> 
+```
+- Updated ActivityForm.js, MessageForm.js, ProfileForm.js and ReplyForm.js with payload data as follows respectively:
+```sh
+    post(url,payload_data,{
+      auth: true,
+      setErrors: setErrors,
+      success: function(data){
+        // add activity to the feed
+        props.setActivities(current => [data,...current]);
+        // reset and close the form
+        setCount(0)
+        setMessage('')
+        setTtl('7-days')
+        props.setPopped(false)
+      }
+
+    post(url,payload_data,{
+      auth: true,
+      setErrors: setErrors,
+      success: function(){
+        console.log('data:',data)
+        if (data.message_group_uuid) {
+          console.log('redirect to message group')
+          window.location.href = `/messages/${data.message_group_uuid}`
+        } else {
+          props.setMessages(current => [...current,data]);
+        }
+
+put(url,payload_data,{
+      auth: true,
+      setErrors: setErrors,
+      success: function(data){
+        setBio(null)
+        setDisplayName(null)
+        props.setPopped(false)
+      }
+
+post(url,payload_data,{
+      auth: true,
+      setErrors: setErrors,
+      success: function(data){
+        // add activity to the feed
+        //let activities_deep_copy = JSON.parse(JSON.stringify(props.activities))
+        //let found_activity = activities_deep_copy.find(function (element) {
+        //  return element.uuid ===  props.activity.uuid;
+        //});
+        //found_activity.replies.push(data)
+        //props.setActivities(activities_deep_copy);
+        // reset and close the form
+        setCount(0)
+        setMessage('')
+        props.setPopped(false)
+      }
+```
+- ActivityItem.css:
+```sh
+Added styles for the .activity_item class and its :hover state.
+a.activity_item {
+  text-decoration: none;
+}
+a.activity_item:hover {
+  background: rgba(255,255,255,0.15);
+}
+```
+- ActivityItem.js
+```sh
+import { Link } from "react-router-dom";
+
+    <Link className='activity_item' to={`/@${props.activity.handle}/status/${props.activity.uuid}`}>
+      <div className="activity_main">
+        <ActivityContent activity={props.activity} />
+        <div className="activity_actions">
+          <ActivityActionReply setReplyActivity={props.setReplyActivity} activity={props.activity} setPopped={props.setPopped} activity_uuid={props.activity.uuid} count={props.activity.replies_count}/>
+          <ActivityActionRepost activity_uuid={props.activity.uuid} count={props.activity.reposts_count}/>
+          <ActivityActionLike activity_uuid={props.activity.uuid} count={props.activity.likes_count}/>
+          <ActivityActionShare activity_uuid={props.activity.uuid} />
+        </div>
+      </div>
+      </Link>
+```
+Created new files Replies.js and Replies.css
+- Replies.css
+```sh
+import './Replies.css';
+
+import ActivityItem from './ActivityItem';
+
+export default function Replies(props) {
+  console.log('replies-props',props)
+  let content;
+  if (props.replies.length === 0){
+    content = <div className='replies_primer'>
+      <span>Nothing to see here yet</span>
+    </div>
+  } else {
+    content = <div className='activities_feed_collection'>
+      {props.replies.map(activity => {
+      return  <ActivityItem 
+          setReplyActivity={props.setReplyActivity}
+          setPopped={props.setPopped}
+          key={activity.uuid}
+          activity={activity} 
+        />
+      })}
+    </div>
+  }
+
+  return (<div>
+    {content}
+  </div>
+  );
+}
+```
+Replies.js
+```sh
+import './Replies.css';
+
+import ActivityItem from './ActivityItem';
+
+export default function Replies(props) {
+  console.log('replies-props',props)
+  let content;
+  if (props.replies.length === 0){
+    content = <div className='replies_primer'>
+      <span>Nothing to see here yet</span>
+    </div>
+  } else {
+    content = <div className='activities_feed_collection'>
+      {props.replies.map(activity => {
+      return  <ActivityItem 
+          setReplyActivity={props.setReplyActivity}
+          setPopped={props.setPopped}
+          key={activity.uuid}
+          activity={activity} 
+        />
+      })}
+    </div>
+  }
+
+  return (<div>
+    {content}
+  </div>
+  );
+}
+```
+In the `frontend-react-js/pages` directory, created and updated the following files: 
+- Created ActivityShowPage.css
+```sh
+import './ActivityShowPage.css';
+import React from "react";
+import { useParams } from 'react-router-dom';
+
+import DesktopNavigation  from 'components/DesktopNavigation';
+import DesktopSidebar     from 'components/DesktopSidebar';
+import ActivityForm from 'components/ActivityForm';
+import ReplyForm from 'components/ReplyForm';
+import Replies from 'components/Replies';
+import ActivityItem from 'components/ActivityItem'
+
+import {get} from 'lib/Requests';
+import {checkAuth} from 'lib/CheckAuth';
+
+export default function ActivityShowPage() {
+  const [activity, setActivity] = React.useState(null);
+  const [replies, setReplies] = React.useState([]);
+  const [popped, setPopped] = React.useState(false);
+  const [poppedReply, setPoppedReply] = React.useState(false);
+  const [replyActivity, setReplyActivity] = React.useState({});
+  const [user, setUser] = React.useState(null);
+  const dataFetchedRef = React.useRef(false);
+  const params = useParams();
+
+  const loadData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/@${params.handle}/status/${params.activity_uuid}`
+    get(url,{
+      auth: false,
+      success: function(data){
+        setActivity(data.activity)
+        setReplies(data.replies)
+      }
+    })
+  }
+
+  React.useEffect(()=>{
+    //prevents double call
+    if (dataFetchedRef.current) return;
+    dataFetchedRef.current = true;
+
+    loadData();
+    checkAuth(setUser);
+  }, [])
+
+  let el_activity
+  if (activity !== null){
+    el_activity = (
+      <ActivityItem 
+        setReplyActivity={setReplyActivity}
+        setPopped={setPoppedReply}
+        activity={activity} 
+      />
+    )
+  }
+
+  return (
+    <article>
+      <DesktopNavigation user={user} active={'home'} setPopped={setPopped} />
+      <div className='content'>
+        <ActivityForm  
+          popped={popped}
+          setPopped={setPopped} 
+        />
+        <ReplyForm 
+          activity={replyActivity} 
+          popped={poppedReply} 
+          setPopped={setPoppedReply} 
+        />
+        <div className='activity_feed'>
+          <div className='activity_feed_heading'>
+            <div className='title'>Home</div>
+          </div>
+          {el_activity}
+          <Replies
+            setReplyActivity={setReplyActivity} 
+            setPopped={setPoppedReply} 
+            replies={replies} 
+          />
+        </div>
+      </div>
+      <DesktopSidebar user={user} />
+    </article>
+  );
+}
+```
+- Created ActivityShowPage.js
+```sh
+import './ActivityShowPage.css';
+import React from "react";
+import { useParams } from 'react-router-dom';
+
+import DesktopNavigation  from 'components/DesktopNavigation';
+import DesktopSidebar     from 'components/DesktopSidebar';
+import ActivityForm from 'components/ActivityForm';
+import ReplyForm from 'components/ReplyForm';
+import Replies from 'components/Replies';
+import ActivityItem from 'components/ActivityItem'
+
+import {get} from 'lib/Requests';
+import {checkAuth} from 'lib/CheckAuth';
+
+export default function ActivityShowPage() {
+  const [activity, setActivity] = React.useState(null);
+  const [replies, setReplies] = React.useState([]);
+  const [popped, setPopped] = React.useState(false);
+  const [poppedReply, setPoppedReply] = React.useState(false);
+  const [replyActivity, setReplyActivity] = React.useState({});
+  const [user, setUser] = React.useState(null);
+  const dataFetchedRef = React.useRef(false);
+  const params = useParams();
+
+  const loadData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/@${params.handle}/status/${params.activity_uuid}`
+    get(url,{
+      auth: false,
+      success: function(data){
+        setActivity(data.activity)
+        setReplies(data.replies)
+      }
+    })
+  }
+
+  React.useEffect(()=>{
+    //prevents double call
+    if (dataFetchedRef.current) return;
+    dataFetchedRef.current = true;
+
+    loadData();
+    checkAuth(setUser);
+  }, [])
+
+  let el_activity
+  if (activity !== null){
+    el_activity = (
+      <ActivityItem 
+        setReplyActivity={setReplyActivity}
+        setPopped={setPoppedReply}
+        activity={activity} 
+      />
+    )
+  }
+
+  return (
+    <article>
+      <DesktopNavigation user={user} active={'home'} setPopped={setPopped} />
+      <div className='content'>
+        <ActivityForm  
+          popped={popped}
+          setPopped={setPopped} 
+        />
+        <ReplyForm 
+          activity={replyActivity} 
+          popped={poppedReply} 
+          setPopped={setPoppedReply} 
+        />
+        <div className='activity_feed'>
+          <div className='activity_feed_heading'>
+            <div className='title'>Home</div>
+          </div>
+          {el_activity}
+          <Replies
+            setReplyActivity={setReplyActivity} 
+            setPopped={setPoppedReply} 
+            replies={replies} 
+          />
+        </div>
+      </div>
+      <DesktopSidebar user={user} />
+    </article>
+  );
+}
+```
+Updated `HomeFeedPage.js`, `MessageGroupNewPage.js`, `MessageGroupsPage.js`, `NotificationsFeedPage` and `UserFeedPage.js` with the load data function respectively:
+```sh
+  const loadData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/home`
+    get(url,{
+      auth: true,
+      success: function(data){
+        setActivities(data)
+      }
+    })
+  }
+
+  const loadUserShortData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/users/@${params.handle}/short`
+    get(url,{
+      auth: true,
+      success: function(data){
+        console.log('other user:',data)
+        setOtherUser(data)
+      }
+    })
+  }  
+
+  const loadMessageGroupsData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/message_groups`
+    get(url,{
+      auth: true,
+      success: function(data){
+        setMessageGroups(data)
+      }
+    })
+  };
+
+  const loadData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/message_groups`
+    get(url,{
+      auth: true,
+      success: function(data){
+        setMessageGroups(data)
+      }
+    })
+  }
+
+  const loadData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/notifications`
+    get(url,{
+      auth: true,
+      success: function(data){
+        setActivities(data)
+      }
+    })
+  }
+
+  const loadData = async () => {
+    const url = `${process.env.REACT_APP_BACKEND_URL}/api/activities/@${params.handle}`
+    get(url,{
+      auth: false,
+      success: function(data){
+        console.log('setprofile',data.profile)
+        setProfile(data.profile)
+        setActivities(data.activities)
+      }
+    })
+  }
+```
