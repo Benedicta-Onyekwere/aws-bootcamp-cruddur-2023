@@ -1,7 +1,6 @@
 import {getAccessToken} from 'lib/CheckAuth';
 
 async function request(method,url,payload_data,options){
-  console.log(options)
   if (options.hasOwnProperty('setErrors')){
     options.setErrors('')
   }
@@ -30,11 +29,13 @@ async function request(method,url,payload_data,options){
     if (res.status === 200) {
       options.success(data)
     } else {
-      if (setErrors !== null){
+      if (options.setErrors !== null){
         options.setErrors(data)
       }
       console.log(res,data)
     }
+    return res; // Return the response
+
   } catch (err) {
     console.log('request catch',err)
     if (err instanceof Response) {
@@ -51,17 +52,17 @@ async function request(method,url,payload_data,options){
 }
 
 export function post(url,payload_data,options){
-  request('POST',url,payload_data,options)
+  return request('POST',url,payload_data,options)
 }
 
 export function put(url,payload_data,options){
-  request('PUT',url,payload_data,options)
+  return request('PUT',url,payload_data,options)
 }
 
 export function get(url,options){
-  request('GET',url,null,options)
+  return request('GET',url,null,options)
 }
 
 export function destroy(url,payload_data,options){
-  request('DELETE',url,payload_data,options)
+  return request('DELETE',url,payload_data,options)
 }

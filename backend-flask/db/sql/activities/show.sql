@@ -16,6 +16,7 @@ SELECT
     replies.uuid,
     reply_users.display_name,
     reply_users.handle,
+    reply_users.cognito_user_id,
     replies.message,
     replies.replies_count,
     replies.reposts_count,
