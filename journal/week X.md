@@ -1967,13 +1967,13 @@ export function destroy(url,payload_data,setErrors,success){
   request('DELETE',url,payload_data,setErrors,success)
 }
 ```
-In the `frontend-react-js/src/pages` updated the following files with the codes below:
-- HomeFeedPage.js
-- MessageGroupNewPage.js
-- MessageGroupsPage.js
-- MessageGroupPage.js
-- NotificationsFeedPage.js
-- UserFeedPage.js
+In the `frontend-react-js/src/pages` updated the following files `const url function`with the codes below:
+- `HomeFeedPage.js`
+- `MessageGroupNewPage.js`
+- `MessageGroupsPage.js`
+- `MessageGroupPage.js`
+- `NotificationsFeedPage.js`
+- `UserFeedPage.js`
 
 ```sh
 import {get} from 'lib/Requests';
@@ -2103,11 +2103,11 @@ import ActivityShowPage from './pages/ActivityShowPage';
     element: <ActivityShowPage />
   },
 ```
-In the `frontend-react-js/components` directory, updated the following files with codes below;
-- ActivityActionLike.js
-- ActivityActionReply.js
-- ActivityActionPost.js
-- ActivityActionShare.js
+In the `frontend-react-js/components` directory, updated the following files `export default function` with the codes below;
+- `ActivityActionLike.js`
+- `ActivityActionReply.js`
+- `ActivityActionPost.js`
+- `ActivityActionShare.js`
 
 ```sh
  export default function ActivityActionLike(props) { 
@@ -2140,6 +2140,7 @@ export default function ActivityActionRepost(props) {
   }
 ```
 - ActivityContent.css:
+  
 Changed the CSS selector from `.activity_content a.activity_identity` to `.activity_content .activity_identity`.
 ```sh
 .activity_content .activity_identity {
@@ -2171,6 +2172,7 @@ Changed the CSS selector from `.activity_content a.activity_identity` to `.activ
 }
 ```
 - ActivityContent.js:
+  
 Replaced the <div> element with a <Link> component for the activity_avatar element.
 ```sh
   return (
@@ -2186,7 +2188,7 @@ Replaced the <div> element with a <Link> component for the activity_avatar eleme
             <div className="created_at" title={format_datetime(props.activity.created_at)}>
               <span className='ago'>{time_ago(props.activity.created_at)}</span> 
 ```
-- Updated ActivityForm.js, MessageForm.js, ProfileForm.js and ReplyForm.js with payload data as follows respectively:
+- Updated `ActivityForm.js`, `MessageForm.js`, `ProfileForm.js` and `ReplyForm.js` files with `payload data function` as follows respectively:
 ```sh
     post(url,payload_data,{
       auth: true,
@@ -2241,7 +2243,6 @@ post(url,payload_data,{
 ```
 - ActivityItem.css:
 ```sh
-Added styles for the .activity_item class and its :hover state.
 a.activity_item {
   text-decoration: none;
 }
@@ -2570,3 +2571,9 @@ Updated `HomeFeedPage.js`, `MessageGroupNewPage.js`, `MessageGroupsPage.js`, `No
     })
   }
 ```
+
+![image](https://github.com/Benedicta-Onyekwere/aws-bootcamp-cruddur-2023/assets/105982108/78b5872e-e549-4cf1-bc72-7c2705a0842e)
+
+
+## More General Cleanup Part 1 and Part 2
+
