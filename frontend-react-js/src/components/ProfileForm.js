@@ -1,22 +1,22 @@
 import './ProfileForm.css';
 import React from "react";
 import process from 'process';
-import {getAccessToken} from 'lib/CheckAuth';
-import {post,} from 'lib/Requests';
+import { getAccessToken } from 'lib/CheckAuth';
+import { post } from 'lib/Requests';
 import FormErrors from 'components/FormErrors';
 
 export default function ProfileForm(props) {
   const [bio, setBio] = React.useState('');
   const [displayName, setDisplayName] = React.useState('');
-  const [errors, setErrors] = React.useState([]);
+  const [errors, setErrors] = React.useState('');
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
     setBio(props.profile.bio || '');
     setDisplayName(props.profile.display_name);
   }, [props.profile])
 
-  const s3uploadkey = async (extension)=> {
-    console.log('ext',extension)
+  const s3uploadkey = async (extension) => {
+    console.log('ext', extension)
     try {
       const gateway_url = `${process.env.REACT_APP_API_GATEWAY_ENDPOINT_URL}/avatars/key_upload`
       await getAccessToken()
@@ -44,16 +44,16 @@ export default function ProfileForm(props) {
       console.log(err);
     }
   }
-  const s3upload = async (event)=> {
-    console.log('event',event)
+  const s3upload = async (event) => {
+    console.log('event', event)
     const file = event.target.files[0]
     const filename = file.name
     const size = file.size
     const type = file.type
     //const preview_image_url = URL.createObjectURL(file)
-    console.log(filename,size,type)
+    console.log(filename, size, type)
     const fileparts = filename.split('.')
-    const extension = fileparts[fileparts.length-1]
+    const extension = fileparts[fileparts.length - 1]
     const presignedurl = await s3uploadkey(extension)
     try {
       console.log('s3upload')
@@ -62,9 +62,10 @@ export default function ProfileForm(props) {
         body: file,
         headers: {
           'Content-Type': type
-      }})
+        }
+      })
       if (res.status === 200) {
-        
+
       } else {
         console.log(res)
       }
@@ -80,10 +81,10 @@ export default function ProfileForm(props) {
       bio: bio,
       display_name: displayName
     }
-    post(url,payload_data,{
+    post(url, payload_data, {
       auth: true,
       setErrors: setErrors,
-      success: function(data){
+      success: function (data) {
         setBio(null)
         setDisplayName(null)
         props.setPopped(false)
@@ -99,7 +100,7 @@ export default function ProfileForm(props) {
     setDisplayName(event.target.value);
   }
 
-  const close = (event)=> {
+  const close = (event) => {
     if (event.target.classList.contains("profile_popup")) {
       props.setPopped(false)
     }
@@ -108,7 +109,7 @@ export default function ProfileForm(props) {
   if (props.popped === true) {
     return (
       <div className="popup_form_wrap profile_popup" onClick={close}>
-        <form 
+        <form
           className='profile_form popup_form'
           onSubmit={onsubmit}
         >
@@ -127,7 +128,7 @@ export default function ProfileForm(props) {
                 type="text"
                 placeholder="Display Name"
                 value={displayName}
-                onChange={display_name_onchange} 
+                onChange={display_name_onchange}
               />
             </div>
             <div className="field bio">
@@ -135,7 +136,7 @@ export default function ProfileForm(props) {
               <textarea
                 placeholder="Bio"
                 value={bio}
-                onChange={bio_onchange} 
+                onChange={bio_onchange}
               />
             </div>
             <FormErrors errors={errors} />
