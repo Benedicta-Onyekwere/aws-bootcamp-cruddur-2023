@@ -6,3 +6,4 @@ stack_name = 'CrdSrvBackendFlask'
 [parameters]
 EnvFrontendUrl = 'https://bennieo.me'
 EnvBackendUrl = 'https://api.bennieo.me'
+DDBMessageTable = 'CrdDdb-DynamoDBTable-O4BL3JQY40MV'
