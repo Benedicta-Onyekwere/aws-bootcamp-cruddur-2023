@@ -2576,4 +2576,377 @@ Updated `HomeFeedPage.js`, `MessageGroupNewPage.js`, `MessageGroupsPage.js`, `No
 
 
 ## More General Cleanup Part 1 and Part 2
+### Backend Flask
+Updated the `backend-flask/db/seed.sql` file by adding a new seed data entry for a new user.
+```sh
+(
+    (SELECT uuid from public.users WHERE users.handle = 'bennieo' LIMIT 1),
+    'I am the other!',
+    current_timestamp + interval '10 day'
+  );
+```
+Updated `db.query_array_json` to `db.query_object_json` in `show_activitiy.py` file in `backend-flask/services` directory.
+```sh
+  def run(activity_uuid):
+
+    sql = db.template('activities','show')
+    results = db.query_object_json(sql,{
+      'uuid': activity_uuid
+    })
+    return results
+```
+### Frontend-React-js
+In the `frontend-react-js/src/components` directory, updated the following files;
+- ActivityItem.css
+
+From
+```sh
+a.activity_item {
+  text-decoration: none;
+a.activity_item:hover {
+```
+With
+```sh
+.activity_item.clickable:hover {
+  cursor: pointer;
+}
+.activity_item.clickable:hover {
+  background: rgba(255,255,255,0.15);
+}
+```
+- ActivityItem.js
+Replace `Link` with `useNavigate`
+```sh
+import './ActivityItem.css';
+
+import { useNavigate  } from "react-router-dom";
+
+export default function ActivityItem(props) {
+  const navigate = useNavigate()
+
+  const click = (event) => {
+    event.preventDefault()
+    const url = `/@${props.activity.handle}/status/${props.activity.uuid}`
+    navigate(url)
+    return false;
+  }
+
+  let expanded_meta;
+  if (props.expanded === true) {
+    1:56 PM · May 23, 2023
+  }
+
+  const attrs = {}
+  let item
+  if (props.expanded === true) {
+    attrs.className = 'activity_item expanded'
+  } else {
+    attrs.className = 'activity_item clickable'
+    attrs.onClick = click
+  }
+  return (
+    <div {...attrs}>
+      <div className="acitivty_main">
+        <ActivityContent activity={props.activity} />
+        {expanded_meta}
+        <div className="activity_actions">
+          <ActivityActionReply setReplyActivity={props.setReplyActivity} activity={props.activity} setPopped={props.setPopped} activity_uuid={props.activity.uuid} count={props.activity.replies_count}/>
+          <ActivityActionRepost activity_uuid={props.activity.uuid} count={props.activity.reposts_count}/>
+          <ActivityActionLike activity_uuid={props.activity.uuid} count={props.activity.likes_count}/>
+          <ActivityActionShare activity_uuid={props.activity.uuid} />
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+Removed unwanted console logs from `Replies.js` and `Requests.js` files.
+
+Updated `frontend-react-js/src/pages/ActivityShowPage.js` file:
+Added `expanded={true}`to the `<ActivityItem>` component.
+Changed the title from "Home" to "Crud" in the <div className='title'>.
+
+Updated ActivityContent.js with;
+```sh
+import './ActivityContent.css';
+
+import { Link } from "react-router-dom";
+import { format_datetime, time_ago } from '../lib/DateTimeFormats';
+import {ReactComponent as BombIcon} from './svg/bomb.svg';
+
+export default function ActivityContent(props) {
+
+  let expires_at;
+  if (props.activity.expires_at) {
+    expires_at =  <div className="expires_at" title={format_datetime(props.activity.expires_at)}>
+                    <BombIcon className='icon' />
+                    <span className='ago'>{time_ago(props.activity.expires_at)}</span>
+                  </div>
+
+  }
+
+  return (
+    <div className='activity_content_wrap'>
+      <Link className='activity_avatar'to={`/@`+props.activity.handle} ></Link>
+      <div className='activity_content'>
+        <div className='activity_meta'>
+          <div className='activity_identity' >
+            <Link className='display_name' to={`/@`+props.activity.handle}>{props.activity.display_name}</Link>
+            <Link className="handle" to={`/@`+props.activity.handle}>@{props.activity.handle}</Link>
+          </div>{/* activity_identity */}
+          <div className='activity_times'>
+            <div className="created_at" title={format_datetime(props.activity.created_at)}>
+              <span className='ago'>{time_ago(props.activity.created_at)}</span> 
+            </div>
+            {expires_at}
+          </div>{/* activity_times */}
+        </div>{/* activity_meta */}
+        <div className="message">{props.activity.message}</div>
+      </div>{/* activity_content */}
+    </div>
+  );
+}
+```
+Updated MessageGroupItem.js with;
+```sh
+import './MessageGroupItem.css';
+import { Link } from "react-router-dom";
+import { format_datetime, message_time_ago } from '../lib/DateTimeFormats';
+import { useParams } from 'react-router-dom';
+
+export default function MessageGroupItem(props) {
+  const params = useParams();
+
+  const classes = () => {
+    let classes = ["message_group_item"];
+    if (params.message_group_uuid === props.message_group.uuid){
+      classes.push('active')
+    }
+    return classes.join(' ');
+  }
+
+  return (
+    <Link className={classes()} to={`/messages/`+props.message_group.uuid}>
+      <div className='message_group_avatar'></div>
+      <div className='message_content'>
+        <div classsName='message_group_meta'>
+          <div className='message_group_identity'>
+            <div className='display_name'>{props.message_group.display_name}</div>
+            <div className="handle">@{props.message_group.handle}</div>
+          </div>{/* activity_identity */}
+        </div>{/* message_meta */}
+        <div className="message">{props.message_group.message}</div>
+        <div className="created_at" title={format_datetime(props.message_group.created_at)}>
+          <span className='ago'>{format_time_created_at(props.message_group.created_at)}</span> 
+        </div>{/* created_at */}
+      </div>{/* message_content */}
+    </Link>
+  );
+}
+```
+Updated MessageItem.js
+```sh
+import './MessageItem.css';
+import { Link } from "react-router-dom";
+import { format_datetime, message_time_ago } from '../lib/DateTimeFormats';
+
+export default function MessageItem(props) {
+  return (
+    <div className='message_item'>
+      <Link className='message_avatar' to={`/messages/@`+props.message.handle}></Link>
+      <div className='message_content'>
+        <div classsName='message_meta'>
+          <div className='message_identity'>
+            <div className='display_name'>{props.message.display_name}</div>
+            <div className="handle">@{props.message.handle}</div>
+          </div>{/* activity_identity */}
+        </div>{/* message_meta */}
+        <div className="message">{props.message.message}</div>
+        <div className="created_at" title={format_datetime(props.message.created_at)}>
+          <span className='ago'>{message_time_ago(props.message.created_at)}</span> 
+        </div>{/* created_at */}
+      </div>{/* message_content */}
+    </div>
+  );
+}
+```
+Updated MessageItem.css with;
+```sh
+.message_item .avatar {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.message_item:hover {
+background: rgba(255,255,255,0.08)
+}
+```
+Created a new file `ActivityShowItem.js` in the `frontend-react-js/src/components` directory
+```sh
+import './ActivityItem.css';
+
+import ActivityActionReply  from '../components/ActivityActionReply';
+import ActivityActionRepost  from '../components/ActivityActionRepost';
+import ActivityActionLike  from '../components/ActivityActionLike';
+import ActivityActionShare  from '../components/ActivityActionShare';
+
+import { Link } from "react-router-dom";
+import { format_datetime, time_ago, time_future } from '../lib/DateTimeFormats';
+import {ReactComponent as BombIcon} from './svg/bomb.svg';
+
+export default function ActivityShowItem(props) {
+
+  const attrs = {}
+  attrs.className = 'activity_item expanded'
+  return (
+    <div {...attrs}>
+      <div className="activity_main">
+        <div className='activity_content_wrap'>
+          <div className='activity_content'>
+            <Link className='activity_avatar'to={`/@`+props.activity.handle} ></Link>
+            <div className='activity_meta'>
+              <div className='activity_identity' >
+                <Link className='display_name' to={`/@`+props.activity.handle}>{props.activity.display_name}</Link>
+                <Link className="handle" to={`/@`+props.activity.handle}>@{props.activity.handle}</Link>
+              </div>{/* activity_identity */}
+              <div className='activity_times'>
+                <div className="created_at" title={format_datetime(props.activity.created_at)}>
+                  <span className='ago'>{time_ago(props.activity.created_at)}</span> 
+                </div>
+                <div className="expires_at" title={format_datetime(props.activity.expires_at)}>
+                  <BombIcon className='icon' />
+                  <span className='ago'>{time_future(props.activity.expires_at)}</span>
+                </div>
+              </div>{/* activity_times */}
+            </div>{/* activity_meta */}
+          </div>{/* activity_content */}
+          <div className="message">{props.activity.message}</div>
+        </div>
+
+        <div className='expandedMeta'>
+          <div className="created_at">
+            {format_datetime(props.activity.created_at)}
+          </div>
+        </div>
+        <div className="activity_actions">
+          <ActivityActionReply setReplyActivity={props.setReplyActivity} activity={props.activity} setPopped={props.setPopped} activity_uuid={props.activity.uuid} count={props.activity.replies_count}/>
+          <ActivityActionRepost activity_uuid={props.activity.uuid} count={props.activity.reposts_count}/>
+          <ActivityActionLike activity_uuid={props.activity.uuid} count={props.activity.likes_count}/>
+          <ActivityActionShare activity_uuid={props.activity.uuid} />
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+### Cleanup Part 2
+Run migration on production DB.
+Build and sync frontend to S3 backend.
+Pull Request and merge from main to prod branch to trigger a new backend build in Github.
+
+Production DynamoDB
+Updated `ddb.py` environment variable to use the new DDB
+```sh
+  def list_message_groups(client,my_user_uuid):
+    year = str(datetime.now().year)
+    table_name = os.getenv("DDB_MESSAGE_TABLE")
+```
+Added this to `erb/backend-flask.env.erb` file
+```sh
+DDB_MESSAGE_TABLE=cruddur-messages
+```
+Added this environment variable to `aws/cfn/service/template.yaml` file.
+```sh
+DDBMessageTable:
+    Type: String
+    Default: cruddur-messages
+
+............
+............
+Environment:
+    - Name: DDB_MESSAGE_TABLE
+      Value: !Ref DDBMessageTable
+```
+Also included table name in `aws/cfn/service/config.toml` file
+```sh
+DDBMessageTable = '<DDB_TABLE_NAME>'
+```
+Then created a new deployment for the stack using `bin/cfn/service`.
+
+### Create Machine User for DDB
+Created a new `template.yaml` and `config.toml` file in the  `aws/cfn/machine-user` directory.
+```sh
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  CruddurMachineUser:
+    Type: 'AWS::IAM::User'
+    Properties: 
+      UserName: 'cruddur_machine_user'
+  DynamoDBFullAccessPolicy: 
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: 'DynamoDBFullAccessPolicy'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Action: 
+              - dynamodb:PutItem
+              - dynamodb:GetItem
+              - dynamodb:Scan
+              - dynamodb:Query
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:BatchWriteItem
+            Resource: '*'
+      Users:
+        - !Ref CruddurMachineUser
+```
+config.toml
+```sh
+[deploy]
+bucket = 'cfn-artifacts-${RANDOM_STRING}'
+region = ${AWS_DEFAULT_REGION}'
+stack_name = 'CrdMachineUser'
+```
+Created a new script file `machineuser` in the `bin/cfn` directory.
+```sh
+#! /usr/bin/bash
+
+set -e # stop execution if anything fails
+
+abs_template_filepath="$ABS_PATH/aws/cfn/machine-user/template.yaml"
+TemplateFilePath=$(realpath --relative-base="$PWD" "$abs_template_filepath")
+
+abs_config_filepath="$ABS_PATH/aws/cfn/machine-user/config.toml"
+ConfigFilePath=$(realpath --relative-base="$PWD" "$abs_config_filepath")
+
+BUCKET=$(cfn-toml key deploy.bucket -t $ConfigFilePath)
+REGION=$(cfn-toml key deploy.region -t $ConfigFilePath)
+STACK_NAME=$(cfn-toml key deploy.stack_name -t $ConfigFilePath)
+
+cfn-lint $TemplateFilePath
+
+echo ">>> Deploy CFN <<<"
+
+aws cloudformation deploy \
+  --stack-name "$STACK_NAME" \
+  --s3-bucket "$BUCKET" \
+  --s3-prefix db \
+  --region $REGION \
+  --template-file $TemplateFilePath \
+  --no-execute-changeset \
+  --tags group=cruddur-machine-user \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+**Note**
+#### In AWS Console
+- The application should never have admin access cause of security concerns because if someone was to break into our running container they can elevate the privileges. For beat practices it's always best to make a separate machine user for deployment.
+- Create new Access Key for this user. 
+- Go to parameter store and update Access Key and ID with new credentials.
+- Make a new codepipeline deployment.
+
+
+
 
