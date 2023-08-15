@@ -54,6 +54,9 @@ Parameters:
   EnvBackendUrl:
     Type: String
     Default: "https://api.bennieo.me"
+  FlaskEnv:
+    Type: String
+    Default: "production"  
   SecretsAWSAccessKeyId:
     Type: String
     Default: 'arn:aws:ssm:us-east-1:914347776203:parameter/cruddur/backend-flask/AWS_ACCESS_KEY_ID'
@@ -170,6 +173,8 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: !Ref ServiceName
           Environment:
+            - Name: FLASK_ENV
+              Value: !Ref FlaskEnv
             - Name: DDB_MESSAGE_TABLE
               Value: !Ref DDBMessageTable
             - Name: 'OTEL_SERVICE_NAME'
